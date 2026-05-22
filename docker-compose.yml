@@ -1,0 +1,33 @@
+services:
+  ai-image-web:
+    build: .
+    container_name: ai-image-web
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./data:/app/data
+      - ./public/uploads:/app/public/uploads
+    environment:
+      - PORT=3001
+      - SUB2API_BASE_URL=http://172.17.0.1:8080/v1
+      - IMAGE_MODEL=gpt-image-2
+      - MAX_PROMPT_LENGTH=4000
+      - REQUEST_TIMEOUT_MS=180000
+      - DATA_DIR=/app/data
+      - GALLERY_MAX_IMAGE_WIDTH=1280
+      - GALLERY_MAX_IMAGE_HEIGHT=1280
+      - GALLERY_WEBP_QUALITY=78
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

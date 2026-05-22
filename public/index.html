@@ -1,0 +1,821 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DreamAPI AI 生图</title>
+  <meta name="description" content="输入 API Key 和图片描述，使用 gpt-image-2 生成图片。" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --panel: rgba(15, 23, 42, .82);
+      --panel2: rgba(30, 41, 59, .72);
+      --text: #e5edf8;
+      --muted: #93a4b8;
+      --line: rgba(148, 163, 184, .22);
+      --blue: #4f8cff;
+      --blue2: #2563eb;
+      --red: #fb7185;
+      --green: #34d399;
+      --gold: #fbbf24;
+      --shadow: 0 24px 80px rgba(0, 0, 0, .42);
+      --radius: 22px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% 10%, rgba(79, 140, 255, .30), transparent 28rem),
+        radial-gradient(circle at 82% 12%, rgba(168, 85, 247, .20), transparent 24rem),
+        radial-gradient(circle at 50% 85%, rgba(52, 211, 153, .12), transparent 30rem),
+        var(--bg);
+    }
+    .wrap { width: min(1180px, calc(100% - 36px)); margin: 0 auto; padding: 42px 0 60px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
+    .brand { display: flex; align-items: center; gap: 13px; }
+    .logo {
+      width: 46px; height: 46px; border-radius: 15px;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa 48%, #34d399);
+      box-shadow: 0 12px 38px rgba(79, 140, 255, .35);
+      display: grid; place-items: center; font-size: 24px;
+    }
+    .brand h1 { margin: 0; font-size: 22px; letter-spacing: .2px; }
+    .brand p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+    .pill { border: 1px solid var(--line); background: rgba(15, 23, 42, .55); color: #c7d2fe; border-radius: 999px; padding: 9px 13px; font-size: 13px; }
+    .hero { display: grid; grid-template-columns: 430px 1fr; gap: 22px; align-items: start; }
+    .card { background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: var(--radius); backdrop-filter: blur(18px); }
+    .form { padding: 24px; position: sticky; top: 18px; }
+    label { display: block; font-size: 14px; color: #dbeafe; margin: 18px 0 8px; }
+    label:first-child { margin-top: 0; }
+    input, textarea, select {
+      width: 100%; border: 1px solid var(--line); border-radius: 14px; outline: none;
+      background: rgba(2, 6, 23, .68); color: var(--text); padding: 13px 14px; font-size: 15px;
+      transition: border-color .18s, box-shadow .18s, background .18s;
+    }
+    textarea { min-height: 170px; resize: vertical; line-height: 1.6; }
+    input:focus, textarea:focus, select:focus { border-color: rgba(96, 165, 250, .75); box-shadow: 0 0 0 4px rgba(37, 99, 235, .18); background: rgba(2, 6, 23, .88); }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    button, .btn {
+      border: 0; border-radius: 14px; padding: 12px 15px; color: white;
+      background: linear-gradient(135deg, var(--blue), var(--blue2));
+      font-size: 14px; font-weight: 800; letter-spacing: .2px; cursor: pointer;
+      box-shadow: 0 14px 32px rgba(37, 99, 235, .25);
+      text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    #generateBtn { width: 100%; margin-top: 22px; padding: 15px 18px; font-size: 16px; }
+    button:disabled { cursor: not-allowed; opacity: .65; filter: grayscale(.2); }
+    .secondary { background: rgba(2, 6, 23, .42); border: 1px solid var(--line); box-shadow: none; color: #dbeafe; }
+    .danger { background: rgba(251, 113, 133, .16); border: 1px solid rgba(251, 113, 133, .35); box-shadow: none; color: #fecdd3; }
+    .hint { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 13px; }
+    .quick-tips {
+      margin-top: 14px;
+      display: grid;
+      gap: 8px;
+    }
+    .quick-tip {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, .16);
+      background: rgba(2, 6, 23, .34);
+      color: #dbeafe;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .quick-tip strong { color: #fff; }
+    .quick-tip .emoji { font-size: 14px; line-height: 1.3; }
+    .status { min-height: 22px; margin-top: 16px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+    .status.error { color: var(--red); }
+    .status.ok { color: var(--green); }
+    .status.warn { color: var(--gold); }
+    .progress-wrap { display: none; margin-top: 16px; }
+    .progress-meta { display: flex; justify-content: space-between; align-items: center; color: #c7d2fe; font-size: 13px; margin-bottom: 8px; }
+    .progress-track { height: 10px; background: rgba(2, 6, 23, .7); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+    .progress-bar { width: 0%; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #60a5fa, #a78bfa, #34d399); transition: width .35s ease; box-shadow: 0 0 22px rgba(96, 165, 250, .55); }
+    .gallery { min-height: 650px; padding: 24px; }
+    .gallery-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+    .gallery h2, .inspire h2 { margin: 0; font-size: 19px; }
+    .result-meta {
+      display: none;
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(96, 165, 250, .2);
+      background: rgba(37, 99, 235, .12);
+      color: #dbeafe;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .result-meta strong { color: white; }
+    .empty {
+      border: 1px dashed rgba(148, 163, 184, .33); border-radius: 20px; min-height: 520px;
+      display: grid; place-items: center; text-align: center; color: var(--muted); background: rgba(2, 6, 23, .22); padding: 30px;
+    }
+    .empty strong { display: block; color: #dbeafe; font-size: 20px; margin-bottom: 8px; }
+    .images, .inspire-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+    .item, .art-card { background: var(--panel2); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+    .item img, .art-card img { display: block; width: 100%; height: auto; background: #020617; }
+    .art-card img { aspect-ratio: 1 / 1; object-fit: cover; }
+    .actions { padding: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .actions a, .actions button { flex: 1; min-width: 100px; text-align: center; text-decoration: none; color: #dbeafe; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: rgba(2, 6, 23, .35); font-size: 14px; box-shadow: none; margin: 0; }
+    .actions button:hover, .actions a:hover, .sort-tabs button:hover { border-color: rgba(96,165,250,.65); background: rgba(37, 99, 235, .22); }
+    .publish-btn { background: linear-gradient(135deg, #ff2d55, #e60023) !important; color: #fff !important; border-color: rgba(255,255,255,.18) !important; }
+    .prompt-preview { padding: 12px 12px 0; color: #dbeafe; font-size: 13px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .meta-line { padding: 10px 12px 0; color: var(--muted); font-size: 12px; display: flex; justify-content: space-between; gap: 8px; }
+    .gallery-tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .gallery-tools input { width: min(260px, 42vw); padding: 9px 11px; font-size: 13px; border-radius: 999px; }
+    .art-card { transition: transform .18s ease, border-color .18s ease; }
+    .art-card:hover { transform: translateY(-2px); border-color: rgba(96,165,250,.45); }
+    .art-card img { cursor: zoom-in; }
+    .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(16px); opacity: 0; pointer-events: none; background: rgba(15,23,42,.96); border: 1px solid var(--line); color: #e5edf8; border-radius: 999px; padding: 12px 16px; box-shadow: var(--shadow); transition: opacity .2s, transform .2s; z-index: 20; }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .modal { position: fixed; inset: 0; background: rgba(2,6,23,.82); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 30; }
+    .modal.show { display: flex; }
+    .modal-card { width: min(980px, 100%); max-height: 92vh; overflow: auto; background: rgba(15,23,42,.98); border: 1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow); }
+    .modal-card img { width: 100%; display: block; background: #020617; }
+    .modal-info { padding: 16px; }
+    .modal-info p { margin: 0 0 12px; color: #dbeafe; line-height: 1.65; }
+    .feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; align-items: start; }
+    .feed-card { position: relative; overflow: hidden; border-radius: 22px; min-height: 300px; background: #020617; border: 1px solid rgba(255,255,255,.12); }
+    .feed-card img { width: 100%; height: 100%; min-height: 300px; display: block; object-fit: cover; transition: transform .2s ease; cursor: pointer; }
+    .feed-card:hover img { transform: scale(1.03); }
+    .feed-gradient { position: absolute; inset: auto 0 0 0; height: 58%; background: linear-gradient(180deg, transparent, rgba(0,0,0,.78)); pointer-events: none; }
+    .feed-caption { position: absolute; left: 12px; right: 76px; bottom: 12px; color: white; font-size: 13px; line-height: 1.45; text-shadow: 0 1px 10px rgba(0,0,0,.65); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .side-actions { position: absolute; right: 10px; bottom: 12px; display: grid; gap: 10px; justify-items: center; }
+    .round-action { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.22); background: rgba(15,23,42,.62); color: white; box-shadow: 0 10px 24px rgba(0,0,0,.32); backdrop-filter: blur(10px); margin: 0; padding: 0; font-size: 22px; min-width: 0; }
+    .round-action.liked, .round-action:hover { background: linear-gradient(135deg, #ff2d55, #e60023); transform: translateY(-1px); }
+    .round-label { color: white; font-size: 12px; font-weight: 800; text-shadow: 0 1px 8px rgba(0,0,0,.7); margin-top: -7px; }
+    .heart-pop { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.4); font-size: 96px; opacity: 0; pointer-events: none; z-index: 40; filter: drop-shadow(0 12px 26px rgba(0,0,0,.45)); }
+    .heart-pop.show { animation: heartPop .72s ease both; }
+    @keyframes heartPop { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.35); } 35% { opacity: 1; transform: translate(-50%, -50%) scale(1.18); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(.88); } }
+    .spinner { display: inline-block; width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.35); border-top-color: white; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 8px; }
+    .inspire { margin-top: 22px; padding: 24px; }
+    .inspire-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
+    .sort-tabs { display: flex; gap: 8px; align-items: center; }
+    .sort-tabs button { padding: 9px 13px; font-size: 13px; box-shadow: none; background: rgba(2, 6, 23, .38); border: 1px solid var(--line); color: #cbd5e1; }
+    .sort-tabs button.active { background: linear-gradient(135deg, rgba(79,140,255,.8), rgba(37,99,235,.8)); color: white; }
+    .small-note { color: var(--muted); font-size: 13px; line-height: 1.5; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } .form { position: static; } header { align-items: flex-start; flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo">✦</div>
+        <div>
+          <h1>DreamAPI AI 生图</h1>
+          <p>输入描述，AI 生成图片</p>
+        </div>
+      </div>
+      <div class="pill">model: gpt-image-2</div>
+    </header>
+
+    <main class="hero">
+      <section class="card form">
+        <label for="apiKey">API Key</label>
+        <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="请输入分发给你的 API Key" />
+
+        <label for="prompt">图片描述</label>
+        <textarea id="prompt" maxlength="4000" placeholder="例如：一只赛博朋克风格的猫站在霓虹雨夜街头，电影感，超清细节，强烈蓝紫色光影"></textarea>
+
+        <div class="grid2">
+          <div>
+            <label for="size">尺寸</label>
+            <select id="size">
+              <option value="1024x1024">方图 1024×1024</option>
+              <option value="1536x1024">横图 1536×1024</option>
+              <option value="1024x1536">竖图 1024×1536</option>
+              <option value="auto">自动</option>
+            </select>
+          </div>
+          <div>
+            <label for="quality">质量</label>
+            <select id="quality">
+              <option value="auto">自动</option>
+              <option value="high">高</option>
+              <option value="medium">中</option>
+              <option value="low">低</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div>
+            <label for="n">数量</label>
+            <select id="n">
+              <option value="1">1 张</option>
+              <option value="2">2 张</option>
+              <option value="3">3 张</option>
+              <option value="4">4 张</option>
+            </select>
+          </div>
+          <div>
+            <label for="format">格式</label>
+            <select id="format">
+              <option value="png">PNG</option>
+              <option value="jpeg">JPEG</option>
+              <option value="webp">WebP</option>
+            </select>
+          </div>
+        </div>
+
+        <button id="generateBtn">生成图片</button>
+        <div id="progressWrap" class="progress-wrap">
+          <div class="progress-meta"><span id="progressText">准备提交...</span><span id="progressNum">0%</span></div>
+          <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+        </div>
+        <div id="status" class="status"></div>
+        <div class="hint">提示：输入 API Key 和图片描述后点击生成，也可以在下方画廊点击"套用提示词"快速开始。</div>
+        <div class="quick-tips">
+          <div class="quick-tip"><span class="emoji">1️⃣</span><span><strong>先输入 API Key</strong><br />未输入时，点赞、发布、生成都会被拦截，避免客户误以为网站没反应。</span></div>
+          <div class="quick-tip"><span class="emoji">2️⃣</span><span><strong>提示词尽量具体</strong><br />建议写主体、风格、镜头、光影、构图，生成结果会稳定很多。</span></div>
+          <div class="quick-tip"><span class="emoji">3️⃣</span><span><strong>生成后可直接发布</strong><br />满意的作品可以一键发布到下方公开灵感画廊，方便客户二次创作。</span></div>
+        </div>
+      </section>
+
+      <section class="card gallery">
+        <div class="gallery-head">
+          <h2>生成结果</h2>
+          <div class="pill" id="countPill">0 张图片</div>
+        </div>
+        <div id="resultMeta" class="result-meta"></div>
+        <div id="empty" class="empty"><div><strong>还没有图片</strong>输入 API Key 和图片描述后点击生成；也可以在下方画廊点击“套用提示词”。</div></div>
+        <div id="images" class="images"></div>
+      </section>
+    </main>
+
+    <section class="card inspire">
+      <div class="inspire-head">
+        <div>
+          <h2>灵感画廊</h2>
+          <div class="small-note">浏览社区作品，点击"套用提示词"快速开始创作。</div>
+        </div>
+        <div class="gallery-tools">
+          <input id="gallerySearch" type="search" placeholder="搜索画廊提示词" />
+          <div class="sort-tabs">
+            <button id="sortHot" class="active">🔥 热度排序</button>
+            <button id="sortNew">🕒 最新发布</button>
+          </div>
+        </div>
+      </div>
+      <div id="inspireGrid" class="inspire-grid feed"></div>
+    </section>
+  </div>
+  <div id="toast" class="toast"></div>
+  <div id="heartPop" class="heart-pop">❤️</div>
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-label="画廊作品预览">
+    <div class="modal-card">
+      <img id="modalImg" alt="画廊作品大图" />
+      <div class="modal-info">
+        <p id="modalPrompt"></p>
+        <div class="actions">
+          <button id="modalUse" type="button" class="secondary">套用提示词</button>
+          <a id="modalOpen" href="#" target="_blank" rel="noreferrer">打开原图</a>
+          <button id="modalClose" type="button" class="danger">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const btn = $('generateBtn');
+    const statusEl = $('status');
+    const imagesEl = $('images');
+    const emptyEl = $('empty');
+    const countPill = $('countPill');
+    const resultMeta = $('resultMeta');
+    const progressWrap = $('progressWrap');
+    const progressBar = $('progressBar');
+    const progressNum = $('progressNum');
+    const progressText = $('progressText');
+    const inspireGrid = $('inspireGrid');
+    const sortHot = $('sortHot');
+    const sortNew = $('sortNew');
+    const gallerySearch = $('gallerySearch');
+    const toast = $('toast');
+    const heartPop = $('heartPop');
+    const modal = $('modal');
+    const modalImg = $('modalImg');
+    const modalPrompt = $('modalPrompt');
+    const modalUse = $('modalUse');
+    const modalOpen = $('modalOpen');
+    const modalClose = $('modalClose');
+
+    const API_PREFIX = location.pathname.startsWith('/draw') ? '/draw-api' : '/api';
+    const API_ENDPOINT = `${API_PREFIX}/generate-image`;
+    const GALLERY_ENDPOINT = `${API_PREFIX}/gallery`;
+    let galleryItems = [];
+    let currentSort = 'hot';
+    let progressTimer = null;
+    let currentImages = [];
+    let modalItem = null;
+    let lastGenerationSummary = null;
+
+    const savedKey = localStorage.getItem('dreamapi_image_key');
+    if (savedKey) $('apiKey').value = savedKey;
+
+    function setStatus(text, type = '') {
+      statusEl.className = 'status ' + type;
+      statusEl.textContent = text;
+    }
+
+    function setResultMeta(summary = null) {
+      lastGenerationSummary = summary;
+      if (!summary) {
+        resultMeta.style.display = 'none';
+        resultMeta.innerHTML = '';
+        return;
+      }
+      const lines = [];
+      if (summary.prompt) lines.push(`<strong>提示词：</strong>${escapeHtml(summary.prompt)}`);
+      if (summary.size) lines.push(`<strong>尺寸：</strong>${escapeHtml(summary.size)}`);
+      if (summary.quality) lines.push(`<strong>质量：</strong>${escapeHtml(summary.quality)}`);
+      if (summary.format) lines.push(`<strong>格式：</strong>${escapeHtml(summary.format)}`);
+      if (summary.count) lines.push(`<strong>数量：</strong>${escapeHtml(String(summary.count))} 张`);
+      if (summary.message) lines.push(`<strong>结果：</strong>${escapeHtml(summary.message)}`);
+      resultMeta.innerHTML = lines.join('<br />');
+      resultMeta.style.display = 'block';
+    }
+
+    function showToast(text) {
+      toast.textContent = text;
+      toast.classList.add('show');
+      clearTimeout(showToast.timer);
+      showToast.timer = setTimeout(() => toast.classList.remove('show'), 1800);
+    }
+
+    function popHeart() {
+      heartPop.classList.remove('show');
+      void heartPop.offsetWidth;
+      heartPop.classList.add('show');
+    }
+
+    function setProgress(percent, text) {
+      const p = Math.max(0, Math.min(100, Math.round(percent)));
+      progressWrap.style.display = 'block';
+      progressBar.style.width = `${p}%`;
+      progressNum.textContent = `${p}%`;
+      if (text) progressText.textContent = text;
+    }
+
+    function startProgress() {
+      clearInterval(progressTimer);
+      let p = 5;
+      setProgress(p, '提交请求中...');
+      progressTimer = setInterval(() => {
+        if (p < 35) {
+          p += 4;
+          setProgress(p, '正在理解提示词...');
+        } else if (p < 70) {
+          p += 2;
+          setProgress(p, '正在绘制图片...');
+        } else if (p < 92) {
+          p += 1;
+          setProgress(p, '正在等待高清结果...');
+        }
+      }, 900);
+    }
+
+    function finishProgress(ok) {
+      clearInterval(progressTimer);
+      if (ok) {
+        setProgress(100, '生成完成');
+        setTimeout(() => { progressWrap.style.display = 'none'; }, 1400);
+      } else {
+        setProgress(100, '生成结束');
+        setTimeout(() => { progressWrap.style.display = 'none'; progressBar.style.width = '0%'; }, 1400);
+      }
+    }
+
+    function setLoading(loading) {
+      btn.disabled = loading;
+      btn.innerHTML = loading ? '<span class="spinner"></span>生成中，请稍候...' : '生成图片';
+    }
+
+    function humanSizeLabel(value) {
+      return ({
+        '1024x1024': '方图 1024×1024',
+        '1536x1024': '横图 1536×1024',
+        '1024x1536': '竖图 1024×1536',
+        'auto': '自动'
+      })[value] || value;
+    }
+
+    function humanQualityLabel(value) {
+      return ({ auto: '自动', high: '高', medium: '中', low: '低' })[value] || value;
+    }
+
+    function humanFormatLabel(value) {
+      return ({ png: 'PNG', jpeg: 'JPEG', webp: 'WebP' })[value] || value;
+    }
+
+    function imageSrc(item) {
+      if (item.type === 'url' && item.url) return item.url;
+      if (item.type === 'base64' && item.b64_json) return `data:image/${item.format || 'png'};base64,${item.b64_json}`;
+      if (item.imageUrl) return item.imageUrl;
+      return '';
+    }
+
+    function escapeHtml(text) {
+      return String(text || '').replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
+    }
+
+    async function publishImage(item, button) {
+      const apiKey = $('apiKey').value.trim();
+      if (!apiKey) {
+        setStatus('请先输入 API Key，再发布作品到画廊。', 'warn');
+        showToast('先输入 API Key 才能发布');
+        return;
+      }
+      
+      const prompt = item.prompt || $('prompt').value.trim();
+      const old = button.textContent;
+      button.disabled = true;
+      button.textContent = '发布中...';
+      try {
+        const body = item.type === 'url'
+          ? { prompt, url: item.url, format: item.format || 'png', apiKey }
+          : { prompt, b64_json: item.b64_json, format: item.format || 'png', apiKey };
+        const resp = await fetch(GALLERY_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || '发布失败');
+        button.textContent = '已发布 ✓';
+        setStatus('已发布到灵感画廊。', 'ok');
+        showToast('发布成功，已进入灵感画廊');
+        await loadGallery('new');
+      } catch (err) {
+        button.disabled = false;
+        button.textContent = old;
+        setStatus(err.message || '发布失败，请稍后重试。', 'error');
+      }
+    }
+
+    function renderImages(images) {
+      currentImages = images;
+      imagesEl.innerHTML = '';
+      countPill.textContent = `${images.length} 张图片`;
+      emptyEl.style.display = images.length ? 'none' : 'grid';
+
+      images.forEach((item, idx) => {
+        const src = imageSrc(item);
+        if (!src) return;
+        const box = document.createElement('div');
+        box.className = 'item';
+
+        const img = document.createElement('img');
+        img.alt = `AI 生成图片 ${idx + 1}`;
+        img.src = src;
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        const a = document.createElement('a');
+        a.href = src;
+        a.download = `dreamapi-image-${Date.now()}-${idx + 1}.${item.format || 'png'}`;
+        a.target = '_blank';
+        a.rel = 'noreferrer';
+        a.textContent = '下载 / 打开';
+
+        const pub = document.createElement('button');
+        pub.type = 'button';
+        pub.className = 'publish-btn';
+        pub.textContent = '➕ 发布';
+        pub.onclick = () => publishImage(item, pub);
+
+        actions.appendChild(a);
+        actions.appendChild(pub);
+        const promptPreview = document.createElement('div');
+        promptPreview.className = 'prompt-preview';
+        promptPreview.textContent = item.prompt || $('prompt').value.trim();
+
+        box.appendChild(img);
+        box.appendChild(promptPreview);
+        box.appendChild(actions);
+        imagesEl.appendChild(box);
+      });
+    }
+
+    async function likeItem(id, button) {
+      if (button.disabled) return;
+      
+      const apiKey = $('apiKey').value.trim();
+      if (!apiKey) {
+        setStatus('请先输入 API Key，再进行点赞互动。', 'warn');
+        showToast('先输入 API Key 才能点赞');
+        return;
+      }
+      
+      button.disabled = true;
+      
+      // 找到对应的点赞数标签
+      const card = button.closest('.feed-card');
+      const likeCountLabel = card.querySelector('.like-count');
+      const item = galleryItems.find(i => i.id === id);
+      if (!item) {
+        button.disabled = false;
+        return;
+      }
+      
+      // 保存原始状态
+      const originalLikes = item.likes;
+      const originalLiked = item.liked;
+      
+      // 乐观更新：立即显示效果
+      if (!originalLiked) {
+        // 当前未点赞，执行点赞
+        item.likes += 1;
+        item.liked = true;
+        likeCountLabel.textContent = item.likes;
+        button.classList.add('liked');
+        popHeart();
+      } else {
+        // 当前已点赞，执行取消点赞
+        item.likes -= 1;
+        item.liked = false;
+        likeCountLabel.textContent = item.likes;
+        button.classList.remove('liked');
+      }
+      
+      try {
+        const resp = await fetch(`${GALLERY_ENDPOINT}/${encodeURIComponent(id)}/like`, { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey })
+        });
+        const data = await resp.json().catch(() => ({}));
+        
+        if (!resp.ok) throw new Error(data.error || '操作失败');
+        
+        // 服务器返回实际点赞数和点赞状态，更新本地状态
+        if (data.likes !== undefined) {
+          item.likes = data.likes;
+          likeCountLabel.textContent = data.likes;
+        }
+        if (data.liked !== undefined) {
+          item.liked = data.liked;
+          if (data.liked) {
+            button.classList.add('liked');
+          } else {
+            button.classList.remove('liked');
+          }
+        }
+      } catch (err) {
+        // 失败时回滚
+        item.likes = originalLikes;
+        item.liked = originalLiked;
+        likeCountLabel.textContent = originalLikes;
+        if (originalLiked) {
+          button.classList.add('liked');
+        } else {
+          button.classList.remove('liked');
+        }
+        showToast(err.message || '操作失败');
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function viewItem(id) {
+      fetch(`${GALLERY_ENDPOINT}/${encodeURIComponent(id)}/view`, { method: 'POST' }).catch(() => {});
+    }
+
+    function usePrompt(prompt, id) {
+      $('prompt').value = prompt;
+      $('prompt').focus();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (id) viewItem(id);
+      setStatus('已套用画廊提示词，可以输入 API Key 后直接生成。', 'ok');
+    }
+
+    function renderGallery(items) {
+      galleryItems = items;
+      const keyword = gallerySearch.value.trim().toLowerCase();
+      const visibleItems = keyword ? items.filter((item) => item.prompt.toLowerCase().includes(keyword)) : items;
+      if (!visibleItems.length) {
+        inspireGrid.innerHTML = '<div class="empty"><div><strong>暂无匹配作品</strong>换个关键词，或生成图片后发布到这里。</div></div>';
+        return;
+      }
+      inspireGrid.innerHTML = '';
+      for (const item of visibleItems) {
+        const card = document.createElement('div');
+        card.className = 'feed-card';
+        card.innerHTML = `
+          <img src="${escapeHtml(item.imageUrl)}" alt="画廊作品" loading="lazy" />
+          <div class="feed-gradient"></div>
+          <div class="feed-caption">${escapeHtml(item.prompt)}</div>
+          <div class="side-actions">
+            <button type="button" class="round-action like-btn ${item.liked ? 'liked' : ''}" title="点赞">❤</button>
+            <div class="round-label like-count">${item.likes}</div>
+            <button type="button" class="round-action use-btn" title="套用提示词">✦</button>
+            <div class="round-label">套用</div>
+            <button type="button" class="round-action open-btn" title="查看大图">↗</button>
+            <div class="round-label">${item.views}</div>
+          </div>
+        `;
+        card.querySelector('img').onclick = () => openModal(item);
+        card.querySelector('.open-btn').onclick = () => openModal(item);
+        card.querySelector('.use-btn').onclick = () => usePrompt(item.prompt, item.id);
+        card.querySelector('.like-btn').onclick = (ev) => likeItem(item.id, ev.currentTarget);
+        inspireGrid.appendChild(card);
+      }
+    }
+
+    function openModal(item) {
+      modalItem = item;
+      modalImg.src = item.imageUrl;
+      modalPrompt.textContent = item.prompt;
+      modalOpen.href = item.imageUrl;
+      modal.classList.add('show');
+      viewItem(item.id);
+    }
+
+    function closeModal() {
+      modal.classList.remove('show');
+      modalImg.src = '';
+      modalItem = null;
+    }
+
+    let galleryOffset = 0;
+    let galleryHasMore = true;
+    let galleryLoading = false;
+    const galleryLimit = 12;
+
+    async function loadGallery(sort = currentSort, append = false) {
+      if (galleryLoading) return;
+      galleryLoading = true;
+      
+      if (!append) {
+        galleryOffset = 0;
+        galleryItems = [];
+      }
+      
+      currentSort = sort;
+      sortHot.classList.toggle('active', sort === 'hot');
+      sortNew.classList.toggle('active', sort === 'new');
+      
+      if (!append) {
+        inspireGrid.innerHTML = '<div class="empty"><div><strong>加载画廊中...</strong></div></div>';
+      }
+      
+      try {
+        const apiKey = $('apiKey').value.trim();
+        const url = apiKey 
+          ? `${GALLERY_ENDPOINT}?sort=${encodeURIComponent(sort)}&limit=${galleryLimit}&offset=${galleryOffset}&apiKey=${encodeURIComponent(apiKey)}`
+          : `${GALLERY_ENDPOINT}?sort=${encodeURIComponent(sort)}&limit=${galleryLimit}&offset=${galleryOffset}`;
+        const resp = await fetch(url);
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || '画廊加载失败');
+        
+        const newItems = Array.isArray(data.items) ? data.items : [];
+        galleryItems = append ? [...galleryItems, ...newItems] : newItems;
+        galleryHasMore = data.hasMore !== false;
+        galleryOffset += newItems.length;
+        
+        renderGallery(galleryItems);
+        if (!append) {
+          showToast(`画廊已加载 ${newItems.length} 张作品`);
+        }
+      } catch (err) {
+        inspireGrid.innerHTML = `<div class="empty"><div><strong>画廊加载失败</strong>${escapeHtml(err.message || '')}</div></div>`;
+      } finally {
+        galleryLoading = false;
+      }
+    }
+
+    sortHot.onclick = () => loadGallery('hot');
+    sortNew.onclick = () => loadGallery('new');
+    gallerySearch.addEventListener('input', () => renderGallery(galleryItems));
+    modalClose.onclick = closeModal;
+    modal.onclick = (ev) => { if (ev.target === modal) closeModal(); };
+    modalUse.onclick = () => { if (modalItem) { usePrompt(modalItem.prompt, modalItem.id); closeModal(); } };
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeModal(); });
+
+    // 滚动加载更多
+    window.addEventListener('scroll', () => {
+      if (galleryLoading || !galleryHasMore) return;
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = document.documentElement.clientHeight;
+      if (scrollTop + clientHeight >= scrollHeight - 300) {
+        loadGallery(currentSort, true);
+      }
+    });
+
+    btn.addEventListener('click', async () => {
+      const apiKey = $('apiKey').value.trim();
+      const prompt = $('prompt').value.trim();
+      if (!apiKey) {
+        setStatus('请先输入 API Key，然后再开始生成图片。', 'warn');
+        showToast('缺少 API Key');
+        $('apiKey').focus();
+        return;
+      }
+      if (!prompt) {
+        setStatus('请输入图片描述，越具体，生成效果越好。', 'warn');
+        showToast('请先输入图片描述');
+        $('prompt').focus();
+        return;
+      }
+
+      const size = $('size').value;
+      const quality = $('quality').value;
+      const format = $('format').value;
+
+      localStorage.setItem('dreamapi_image_key', apiKey);
+      setLoading(true);
+      startProgress();
+      renderImages([]);
+      setResultMeta({
+        prompt,
+        size: humanSizeLabel(size),
+        quality: humanQualityLabel(quality),
+        format: humanFormatLabel(format),
+        count: Number($('n').value) || 1,
+        message: '任务已提交，正在生成中...'
+      });
+
+      const count = Number($('n').value) || 1;
+      const allImages = [];
+      let successCount = 0;
+      let failCount = 0;
+
+      try {
+        for (let i = 0; i < count; i++) {
+          setStatus(`正在生成第 ${i + 1}/${count} 张图片...`);
+          
+          try {
+            const resp = await fetch(API_ENDPOINT, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                apiKey,
+                prompt,
+                size,
+                quality,
+                n: 1,
+                format
+              })
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(data.error || '生成失败');
+            const images = Array.isArray(data.images) ? data.images : [];
+            if (images.length > 0) {
+              allImages.push(...images);
+              successCount++;
+              renderImages(allImages);
+            }
+          } catch (err) {
+            failCount++;
+            console.error(`第 ${i + 1} 张生成失败:`, err);
+          }
+        }
+
+        if (successCount === 0) {
+          throw new Error('所有图片生成失败，请稍后重试。');
+        }
+
+        finishProgress(true);
+        const msg = failCount > 0 
+          ? `生成完成，成功 ${successCount} 张，失败 ${failCount} 张。`
+          : `生成完成，共 ${successCount} 张。喜欢的话可以发布到下方灵感画廊。`;
+        setStatus(msg, failCount > 0 ? 'error' : 'ok');
+        setResultMeta({
+          prompt,
+          size: humanSizeLabel(size),
+          quality: humanQualityLabel(quality),
+          format: humanFormatLabel(format),
+          count,
+          message: msg
+        });
+      } catch (err) {
+        finishProgress(false);
+        setStatus(err.message || '图片生成失败，请稍后重试。', 'error');
+        setResultMeta({
+          prompt,
+          size: humanSizeLabel(size),
+          quality: humanQualityLabel(quality),
+          format: humanFormatLabel(format),
+          count,
+          message: err.message || '图片生成失败，请稍后重试。'
+        });
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    loadGallery('hot');
+  </script>
+</body>
+</html>
