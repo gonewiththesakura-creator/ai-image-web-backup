@@ -135,6 +135,14 @@ app.get('/health', (req, res) => {
   res.json({ ok: true, model: IMAGE_MODEL });
 });
 
+app.get('/api/admin/verify', (req, res) => {
+  const password = req.headers['x-admin-password'];
+  if (password !== ADMIN_PASSWORD) {
+    return res.status(403).json({ error: '管理员密码错误。' });
+  }
+  res.json({ ok: true });
+});
+
 function normalizeApiKey(value) {
   if (typeof value !== 'string') return '';
   return value.trim();

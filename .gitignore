@@ -1,6 +1,6 @@
 node_modules/
-data/*.sqlite-shm
-data/*.sqlite-wal
+data/
+public/uploads/
 .git/
 .DS_Store
 .env
