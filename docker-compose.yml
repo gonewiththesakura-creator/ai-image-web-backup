@@ -9,7 +9,7 @@ services:
       - ./public/uploads:/app/public/uploads
     environment:
       - PORT=3001
-      - SUB2API_BASE_URL=http://172.17.0.1:8080/v1
+      - SUB2API_BASE_URL=http://sub2api:8080/v1
       - IMAGE_MODEL=gpt-image-2
       - MAX_PROMPT_LENGTH=4000
       - REQUEST_TIMEOUT_MS=180000
@@ -20,6 +20,9 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      - default
+      - sub2api_net
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s
@@ -31,3 +34,8 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+networks:
+  sub2api_net:
+    external: true
+    name: suapi-deployment_default
