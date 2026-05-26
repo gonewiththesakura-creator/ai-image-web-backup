@@ -379,14 +379,30 @@
     let deviceFingerprint = null;
 
     // 初始化设备指纹
+    let fingerprintLoadTimeout = null;
     (async () => {
       try {
+        // 设置 5 秒超时
+        fingerprintLoadTimeout = setTimeout(() => {
+          if (!deviceFingerprint) {
+            console.warn('设备指纹加载超时，使用降级方案');
+            // 使用简单的浏览器指纹作为降级方案
+            deviceFingerprint = 'fallback_' + btoa(navigator.userAgent + navigator.language).slice(0, 32);
+            updateTrialQuota();
+          }
+        }, 5000);
+        
         const fp = await FingerprintJS.load();
         const result = await fp.get();
         deviceFingerprint = result.visitorId;
+        clearTimeout(fingerprintLoadTimeout);
         await updateTrialQuota();
       } catch (err) {
         console.error('设备指纹初始化失败:', err);
+        // 降级方案：使用简单的浏览器指纹
+        deviceFingerprint = 'fallback_' + btoa(navigator.userAgent + navigator.language).slice(0, 32);
+        clearTimeout(fingerprintLoadTimeout);
+        await updateTrialQuota();
       }
     })();
 
