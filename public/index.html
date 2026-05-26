@@ -108,6 +108,14 @@
     .secondary { background: rgba(2, 6, 23, .42); border: 1px solid var(--line); box-shadow: none; color: #dbeafe; }
     .danger { background: rgba(251, 113, 133, .16); border: 1px solid rgba(251, 113, 133, .35); box-shadow: none; color: #fecdd3; }
     .hint { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 13px; }
+    .ref-box { margin-top: 12px; padding: 12px; border: 1px dashed rgba(96,165,250,.38); border-radius: 16px; background: rgba(37,99,235,.08); }
+    .ref-box input[type="file"] { padding: 10px; font-size: 13px; }
+    .ref-title { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 8px; color: #dbeafe; font-size: 13px; font-weight: 800; }
+    .ref-mode { color: #93c5fd; font-size: 12px; font-weight: 600; }
+    .ref-preview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+    .ref-preview-item { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: rgba(2,6,23,.55); min-height: 76px; }
+    .ref-preview-item img { width: 100%; height: 92px; object-fit: cover; display: block; }
+    .ref-preview-item button { position: absolute; right: 5px; top: 5px; width: 24px; height: 24px; padding: 0; border-radius: 999px; background: rgba(15,23,42,.86); border: 1px solid rgba(255,255,255,.22); box-shadow: none; }
     .quick-tips {
       margin-top: 14px;
       display: grid;
@@ -237,6 +245,13 @@
         <label for="prompt">图片描述</label>
         <textarea id="prompt" maxlength="4000" placeholder="例如：一只赛博朋克风格的猫站在霓虹雨夜街头，电影感，超清细节，强烈蓝紫色光影"></textarea>
 
+        <div class="ref-box">
+          <div class="ref-title"><span>参考图模式</span><span class="ref-mode" id="referenceModeText">未上传参考图</span></div>
+          <input id="referenceImages" type="file" accept="image/png,image/jpeg,image/webp" multiple />
+          <div class="hint">最多上传 3 张参考图。上传后会根据参考图的主体、风格、构图或色彩作图；图片会在浏览器内压缩后提交。</div>
+          <div id="referencePreview" class="ref-preview"></div>
+        </div>
+
         <div class="grid2">
           <div>
             <label for="sizePreset">生图比例</label>
@@ -364,6 +379,9 @@
     const modalClose = $('modalClose');
     const trialQuota = $('trialQuota');
     const trialQuotaText = $('trialQuotaText');
+    const referenceInput = $('referenceImages');
+    const referencePreview = $('referencePreview');
+    const referenceModeText = $('referenceModeText');
 
     const API_PREFIX = location.pathname.startsWith('/draw') ? '/draw-api' : '/api';
     const API_ENDPOINT = `${API_PREFIX}/generate-image`;
@@ -377,6 +395,7 @@
     let modalItem = null;
     let lastGenerationSummary = null;
     let deviceFingerprint = null;
+    let referenceImages = [];
 
     // 初始化设备指纹
     let fingerprintLoadTimeout = null;
@@ -417,6 +436,67 @@
         }
       } catch (err) {
         console.error('获取试用额度失败:', err);
+      }
+    }
+
+    function fileToCompressedDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        if (!file || !/^image\/(png|jpeg|webp)$/i.test(file.type)) {
+          reject(new Error('参考图只支持 PNG、JPEG、WebP'));
+          return;
+        }
+        if (file.size > 8 * 1024 * 1024) {
+          reject(new Error('单张参考图不能超过 8MB'));
+          return;
+        }
+        const img = new Image();
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('参考图读取失败'));
+        reader.onload = () => {
+          img.onload = () => {
+            const maxEdge = 1280;
+            const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', 0.86));
+          };
+          img.onerror = () => reject(new Error('参考图解码失败'));
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function renderReferencePreview() {
+      referenceModeText.textContent = referenceImages.length ? `已启用：${referenceImages.length}/3 张` : '未上传参考图';
+      referencePreview.innerHTML = referenceImages.map((src, index) => `
+        <div class="ref-preview-item">
+          <img src="${src}" alt="参考图 ${index + 1}" />
+          <button type="button" data-ref-remove="${index}" title="移除参考图">×</button>
+        </div>
+      `).join('');
+    }
+
+    async function handleReferenceFiles(files) {
+      const list = Array.from(files || []);
+      const picked = list.slice(0, 3);
+      if (list.length > 3) showToast('最多只能上传 3 张参考图，已自动取前 3 张');
+      try {
+        referenceImages = [];
+        for (const file of picked) {
+          referenceImages.push(await fileToCompressedDataUrl(file));
+        }
+        renderReferencePreview();
+        if (referenceImages.length) showToast(`已添加 ${referenceImages.length} 张参考图`);
+      } catch (err) {
+        referenceImages = [];
+        renderReferencePreview();
+        showToast(err.message || '参考图处理失败');
+      } finally {
+        referenceInput.value = '';
       }
     }
 
@@ -724,7 +804,7 @@
             <button type="button" class="round-action like-btn ${item.liked ? 'liked' : ''}" title="点赞">❤</button>
             <div class="round-label like-count">${item.likes}</div>
             <button type="button" class="round-action use-btn" title="套用提示词">✦</button>
-            <div class="round-label">套用 ${item.views}</div>
+            <div class="round-label">套用</div>
             <button type="button" class="round-action open-btn" title="查看大图">↗</button>
           </div>
         `;
@@ -798,6 +878,14 @@
       }
     }
 
+    referenceInput.addEventListener('change', (ev) => handleReferenceFiles(ev.target.files));
+    referencePreview.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-ref-remove]');
+      if (!btn) return;
+      referenceImages.splice(Number(btn.dataset.refRemove), 1);
+      renderReferencePreview();
+    });
+
     sortHot.onclick = () => loadGallery('hot');
     sortNew.onclick = () => loadGallery('new');
     gallerySearch.addEventListener('input', () => renderGallery(galleryItems));
@@ -855,7 +943,7 @@
         format: humanFormatLabel(format),
         batchMode: humanBatchModeLabel(batchMode),
         count: Number($('n').value) || 1,
-        message: '任务已提交，正在生成中...'
+        message: referenceImages.length ? `任务已提交，参考图 ${referenceImages.length} 张，正在生成中...` : '任务已提交，正在生成中...'
       });
 
       const count = Number($('n').value) || 1;
@@ -875,7 +963,8 @@
             size,
             outputMode,
             n: 1,
-            format
+            format,
+            referenceImages
           })
         });
         const data = await resp.json().catch(() => ({}));
@@ -919,7 +1008,7 @@
           format: humanFormatLabel(format),
           batchMode: humanBatchModeLabel(batchMode),
           count,
-          message: msg
+          message: referenceImages.length ? `${msg} 已使用 ${referenceImages.length} 张参考图。` : msg
         });
         
         // 更新试用额度显示

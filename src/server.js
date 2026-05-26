@@ -26,6 +26,8 @@ const GALLERY_MAX_IMAGE_WIDTH = Number(process.env.GALLERY_MAX_IMAGE_WIDTH || 12
 const GALLERY_MAX_IMAGE_HEIGHT = Number(process.env.GALLERY_MAX_IMAGE_HEIGHT || 1280);
 const GALLERY_WEBP_QUALITY = Number(process.env.GALLERY_WEBP_QUALITY || 78);
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123456';
+const MAX_REFERENCE_IMAGES = 3;
+const MAX_REFERENCE_IMAGE_BYTES = 5 * 1024 * 1024;
 
 const ALLOWED_SIZES = new Set([
   '1024x1024',
@@ -535,6 +537,46 @@ function publicError(status, message) {
   return err;
 }
 
+function parseReferenceImages(input) {
+  const items = Array.isArray(input) ? input.slice(0, MAX_REFERENCE_IMAGES) : [];
+  if (Array.isArray(input) && input.length > MAX_REFERENCE_IMAGES) {
+    throw publicError(400, `参考图最多上传 ${MAX_REFERENCE_IMAGES} 张。`);
+  }
+  return items.map((value, index) => {
+    const raw = String(value || '');
+    const match = raw.match(/^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=\r\n]+)$/i);
+    if (!match) throw publicError(400, `第 ${index + 1} 张参考图格式无效。`);
+    const sourceFormat = match[1].toLowerCase() === 'jpg' ? 'jpeg' : match[1].toLowerCase();
+    const buffer = Buffer.from(match[2].replace(/\s/g, ''), 'base64');
+    if (buffer.length < 100 || buffer.length > MAX_REFERENCE_IMAGE_BYTES) {
+      throw publicError(400, `第 ${index + 1} 张参考图大小不符合要求。`);
+    }
+    return { buffer, sourceFormat, filename: `reference-${index + 1}.${sourceFormat === 'jpeg' ? 'jpg' : sourceFormat}` };
+  });
+}
+
+async function normalizeReferenceImages(input) {
+  const refs = parseReferenceImages(input);
+  const normalized = [];
+  for (let i = 0; i < refs.length; i += 1) {
+    try {
+      const buffer = await sharp(refs[i].buffer, { limitInputPixels: 36_000_000 })
+        .rotate()
+        .resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true })
+        .png({ compressionLevel: 8 })
+        .toBuffer();
+      if (buffer.length > MAX_REFERENCE_IMAGE_BYTES) {
+        throw publicError(400, `第 ${i + 1} 张参考图压缩后仍然过大。`);
+      }
+      normalized.push({ buffer, filename: `reference-${i + 1}.png`, type: 'image/png' });
+    } catch (err) {
+      if (err.status) throw err;
+      throw publicError(400, `第 ${i + 1} 张参考图处理失败，请换一张图片。`);
+    }
+  }
+  return normalized;
+}
+
 function clientId(req) {
   const raw = `${getClientIp(req)}|${req.get('user-agent') || ''}`;
   return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 32);
@@ -771,8 +813,16 @@ app.post('/api/generate-image', limiter, async (req, res) => {
     const ip = req.ip || req.connection.remoteAddress || '';
 
     if (!rawPrompt) throw publicError(400, '请输入图片描述。');
+
+    const size = normalizeSize(req.body?.size);
+    const quality = pickAllowed(req.body?.quality, ALLOWED_QUALITIES, 'auto');
+    const outputMode = normalizeOutputMode(req.body?.outputMode);
+    const output_format = pickAllowed(req.body?.format, ALLOWED_FORMATS, 'png');
+    const n = normalizeCount(req.body?.n);
+    const finalSize = upscaleDimensions(size, outputMode);
+    const referenceImages = await normalizeReferenceImages(req.body?.referenceImages);
     
-    // 如果没有 API Key，检查试用额度
+    // 如果没有 API Key，检查试用额度。注意：参考图校验必须先完成，避免非法请求消耗试用额度。
     let usingTrial = false;
     if (!apiKey) {
       const quota = checkAndConsumeTrialQuota(fingerprint, ip);
@@ -782,14 +832,9 @@ app.post('/api/generate-image', limiter, async (req, res) => {
       usingTrial = true;
     }
 
-    const size = normalizeSize(req.body?.size);
-    const quality = pickAllowed(req.body?.quality, ALLOWED_QUALITIES, 'auto');
-    const outputMode = normalizeOutputMode(req.body?.outputMode);
-    const output_format = pickAllowed(req.body?.format, ALLOWED_FORMATS, 'png');
-    const n = normalizeCount(req.body?.n);
-    const finalSize = upscaleDimensions(size, outputMode);
-
-    const finalPrompt = `请把下面的用户输入理解为图片创作需求，并直接生成图片。不要输出文字、解释、对话或代码，只生成符合描述的图片。\n\n用户输入：\n${rawPrompt}`;
+    const finalPrompt = referenceImages.length
+      ? `请参考用户上传的参考图进行图片创作。参考图可用于主体、风格、构图、色彩、材质或氛围参考，但仍以用户文字需求为最终准则。不要输出文字、解释、对话或代码，只生成符合描述的图片。\n\n用户输入：\n${rawPrompt}`
+      : `请把下面的用户输入理解为图片创作需求，并直接生成图片。不要输出文字、解释、对话或代码，只生成符合描述的图片。\n\n用户输入：\n${rawPrompt}`;
 
     // 试用模式使用内置 API Key
     const effectiveApiKey = usingTrial ? (process.env.TRIAL_API_KEY || apiKey) : apiKey;
@@ -801,22 +846,42 @@ app.post('/api/generate-image', limiter, async (req, res) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-    const upstreamResp = await fetch(`${API_BASE_URL}/images/generations`, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${effectiveApiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: IMAGE_MODEL,
-        prompt: finalPrompt,
-        size: finalSize,
-        quality,
-        output_format,
-        n
-      })
-    }).finally(() => clearTimeout(timeout));
+    let upstreamResp;
+    if (referenceImages.length) {
+      const form = new FormData();
+      form.append('model', IMAGE_MODEL);
+      form.append('prompt', finalPrompt);
+      form.append('size', finalSize);
+      form.append('quality', quality);
+      form.append('output_format', output_format);
+      form.append('n', String(n));
+      for (const ref of referenceImages) {
+        form.append('image', new Blob([ref.buffer], { type: ref.type }), ref.filename);
+      }
+      upstreamResp = await fetch(`${API_BASE_URL}/images/edits`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { Authorization: `Bearer ${effectiveApiKey}` },
+        body: form
+      }).finally(() => clearTimeout(timeout));
+    } else {
+      upstreamResp = await fetch(`${API_BASE_URL}/images/generations`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${effectiveApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: IMAGE_MODEL,
+          prompt: finalPrompt,
+          size: finalSize,
+          quality,
+          output_format,
+          n
+        })
+      }).finally(() => clearTimeout(timeout));
+    }
 
     let upstreamData = null;
     const text = await upstreamResp.text();
