@@ -35,7 +35,7 @@
         var(--bg);
     }
     .wrap { width: min(1180px, calc(100% - 36px)); margin: 0 auto; padding: 42px 0 60px; }
-    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
     .brand { display: flex; align-items: center; gap: 13px; }
     .logo {
       width: 46px; height: 46px; border-radius: 15px;
@@ -46,6 +46,43 @@
     .brand h1 { margin: 0; font-size: 22px; letter-spacing: .2px; }
     .brand p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
     .pill { border: 1px solid var(--line); background: rgba(15, 23, 42, .55); color: #c7d2fe; border-radius: 999px; padding: 9px 13px; font-size: 13px; }
+    .promo-banner {
+      width: 100%;
+      background: linear-gradient(135deg, rgba(251, 113, 133, .18), rgba(168, 85, 247, .18));
+      border: 1px solid rgba(251, 113, 133, .35);
+      border-radius: 18px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .promo-text { flex: 1; min-width: 240px; }
+    .promo-text strong { color: #fbbf24; font-size: 18px; display: block; margin-bottom: 4px; }
+    .promo-text p { margin: 0; color: #fecdd3; font-size: 14px; line-height: 1.5; }
+    .promo-btn {
+      background: linear-gradient(135deg, #fbbf24, #f59e0b) !important;
+      color: #000 !important;
+      font-weight: 900;
+      padding: 12px 24px;
+      border-radius: 999px;
+      text-decoration: none;
+      white-space: nowrap;
+      box-shadow: 0 8px 24px rgba(251, 191, 36, .35);
+    }
+    .promo-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(251, 191, 36, .45); }
+    .trial-quota {
+      background: rgba(52, 211, 153, .12);
+      border: 1px solid rgba(52, 211, 153, .35);
+      color: #6ee7b7;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
     .hero { display: grid; grid-template-columns: 430px 1fr; gap: 22px; align-items: start; }
     .card { background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: var(--radius); backdrop-filter: blur(18px); }
     .form { padding: 24px; position: sticky; top: 18px; }
@@ -175,13 +212,27 @@
           <p>输入描述，AI 生成图片</p>
         </div>
       </div>
-      <div class="pill">model: gpt-image-2</div>
+      <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+        <div id="trialQuota" class="trial-quota" style="display: none;">
+          <span>🎁</span>
+          <span id="trialQuotaText">免费体验 2 张</span>
+        </div>
+        <div class="pill">model: gpt-image-2</div>
+      </div>
     </header>
+
+    <div class="promo-banner">
+      <div class="promo-text">
+        <strong>🎉 新用户注册送 2,000,000 Tokens</strong>
+        <p>立即注册 DreamAPI，免费获得海量 Token 额度，畅享 AI 生图、对话、代码生成等全系列服务</p>
+      </div>
+      <a href="http://47.243.210.214:8080" target="_blank" rel="noopener" class="promo-btn">立即注册领取</a>
+    </div>
 
     <main class="hero">
       <section class="card form">
-        <label for="apiKey">API Key</label>
-        <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="请输入分发给你的 API Key" />
+        <label for="apiKey">API Key <span style="color: var(--muted); font-weight: normal;">(可选，未输入时使用免费体验额度)</span></label>
+        <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="请输入 API Key，或留空使用免费体验" />
 
         <label for="prompt">图片描述</label>
         <textarea id="prompt" maxlength="4000" placeholder="例如：一只赛博朋克风格的猫站在霓虹雨夜街头，电影感，超清细节，强烈蓝紫色光影"></textarea>
@@ -234,7 +285,8 @@
         <div id="status" class="status"></div>
         <div class="hint">提示：现在只保留比例、质量、批量、格式四项。质量选择 2K/4K，会自动映射到对应输出规格并按串行方式生成，稳定性更高。</div>
         <div class="quick-tips">
-          <div class="quick-tip"><span class="emoji">1️⃣</span><span><strong>先输入 API Key</strong><br />未输入时，点赞、发布、生成都会被拦截，避免客户误以为网站没反应。</span></div>
+          <div class="quick-tip"><span class="emoji">🎁</span><span><strong>免费体验</strong><br />未输入 API Key 时，每个设备每 24 小时可免费生成 2 张图片体验效果。</span></div>
+          <div class="quick-tip"><span class="emoji">1️⃣</span><span><strong>批量生图任务模式</strong><br />选择批量 2 张或更多时，会依次提交独立任务，每张图片单独生成，失败不影响其他任务。</span></div>
           <div class="quick-tip"><span class="emoji">2️⃣</span><span><strong>提示词尽量具体</strong><br />建议写主体、风格、镜头、光影、构图，生成结果会稳定很多。</span></div>
           <div class="quick-tip"><span class="emoji">3️⃣</span><span><strong>生成后可直接发布</strong><br />满意的作品可以一键发布到下方公开灵感画廊，方便客户二次创作。</span></div>
         </div>
@@ -284,7 +336,9 @@
     </div>
   </div>
 
-  <script>
+  <script type="module">
+    import FingerprintJS from 'https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/+esm';
+
     const $ = (id) => document.getElementById(id);
     const btn = $('generateBtn');
     const statusEl = $('status');
@@ -308,10 +362,13 @@
     const modalUse = $('modalUse');
     const modalOpen = $('modalOpen');
     const modalClose = $('modalClose');
+    const trialQuota = $('trialQuota');
+    const trialQuotaText = $('trialQuotaText');
 
     const API_PREFIX = location.pathname.startsWith('/draw') ? '/draw-api' : '/api';
     const API_ENDPOINT = `${API_PREFIX}/generate-image`;
     const GALLERY_ENDPOINT = `${API_PREFIX}/gallery`;
+    const TRIAL_QUOTA_ENDPOINT = `${API_PREFIX}/trial-quota`;
     const clarityToOutputMode = { '2k': '2k', '4k': '4k' };
     let galleryItems = [];
     let currentSort = 'hot';
@@ -319,6 +376,33 @@
     let currentImages = [];
     let modalItem = null;
     let lastGenerationSummary = null;
+    let deviceFingerprint = null;
+
+    // 初始化设备指纹
+    (async () => {
+      try {
+        const fp = await FingerprintJS.load();
+        const result = await fp.get();
+        deviceFingerprint = result.visitorId;
+        await updateTrialQuota();
+      } catch (err) {
+        console.error('设备指纹初始化失败:', err);
+      }
+    })();
+
+    async function updateTrialQuota() {
+      if (!deviceFingerprint) return;
+      try {
+        const resp = await fetch(`${TRIAL_QUOTA_ENDPOINT}?fingerprint=${encodeURIComponent(deviceFingerprint)}`);
+        const data = await resp.json();
+        if (data.remaining !== undefined) {
+          trialQuota.style.display = 'inline-flex';
+          trialQuotaText.textContent = `免费体验剩余 ${data.remaining}/${data.total} 张`;
+        }
+      } catch (err) {
+        console.error('获取试用额度失败:', err);
+      }
+    }
 
     const savedKey = localStorage.getItem('dreamapi_image_key');
     if (savedKey) $('apiKey').value = savedKey;
@@ -436,9 +520,9 @@
 
     async function publishImage(item, button) {
       const apiKey = $('apiKey').value.trim();
-      if (!apiKey) {
-        setStatus('请先输入 API Key，再发布作品到画廊。', 'warn');
-        showToast('先输入 API Key 才能发布');
+      if (!apiKey && !deviceFingerprint) {
+        setStatus('设备指纹加载中，请稍候再试...', 'warn');
+        showToast('设备指纹加载中');
         return;
       }
       
@@ -448,8 +532,8 @@
       button.textContent = '发布中...';
       try {
         const body = item.type === 'url'
-          ? { prompt, url: item.url, format: item.format || 'png', apiKey }
-          : { prompt, b64_json: item.b64_json, format: item.format || 'png', apiKey };
+          ? { prompt, url: item.url, format: item.format || 'png', apiKey: apiKey || `trial_${deviceFingerprint}` }
+          : { prompt, b64_json: item.b64_json, format: item.format || 'png', apiKey: apiKey || `trial_${deviceFingerprint}` };
         const resp = await fetch(GALLERY_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -516,9 +600,9 @@
       if (button.disabled) return;
       
       const apiKey = $('apiKey').value.trim();
-      if (!apiKey) {
-        setStatus('请先输入 API Key，再进行点赞互动。', 'warn');
-        showToast('先输入 API Key 才能点赞');
+      if (!apiKey && !deviceFingerprint) {
+        setStatus('设备指纹加载中，请稍候再试...', 'warn');
+        showToast('设备指纹加载中');
         return;
       }
       
@@ -557,7 +641,7 @@
         const resp = await fetch(`${GALLERY_ENDPOINT}/${encodeURIComponent(id)}/like`, { 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiKey })
+          body: JSON.stringify({ apiKey: apiKey || `trial_${deviceFingerprint}` })
         });
         const data = await resp.json().catch(() => ({}));
         
@@ -721,16 +805,18 @@
     btn.addEventListener('click', async () => {
       const apiKey = $('apiKey').value.trim();
       const prompt = $('prompt').value.trim();
-      if (!apiKey) {
-        setStatus('请先输入 API Key，然后再开始生成图片。', 'warn');
-        showToast('缺少 API Key');
-        $('apiKey').focus();
-        return;
-      }
+      
       if (!prompt) {
         setStatus('请输入图片描述，越具体，生成效果越好。', 'warn');
         showToast('请先输入图片描述');
         $('prompt').focus();
+        return;
+      }
+
+      // 如果没有 API Key，检查设备指纹
+      if (!apiKey && !deviceFingerprint) {
+        setStatus('设备指纹加载中，请稍候再试...', 'warn');
+        showToast('设备指纹加载中');
         return;
       }
 
@@ -740,7 +826,10 @@
       const batchMode = 'sequential';
       const outputMode = clarityToOutputMode[clarity] || '2k';
 
-      localStorage.setItem('dreamapi_image_key', apiKey);
+      if (apiKey) {
+        localStorage.setItem('dreamapi_image_key', apiKey);
+      }
+      
       setLoading(true);
       startProgress();
       renderImages([]);
@@ -765,7 +854,8 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            apiKey,
+            apiKey: apiKey || undefined,
+            fingerprint: deviceFingerprint,
             prompt,
             size,
             outputMode,
@@ -783,18 +873,17 @@
       };
 
       try {
-        if (batchMode === 'parallel' && count > 1) {
-          const settled = await Promise.allSettled(
-            Array.from({ length: count }, (_, i) => generateOne(i))
-          );
-          failCount = settled.filter((item) => item.status === 'rejected').length;
-        } else {
-          for (let i = 0; i < count; i++) {
-            try {
-              await generateOne(i);
-            } catch (err) {
-              failCount++;
-              console.error(`第 ${i + 1} 张生成失败:`, err);
+        // 批量生图：依次提交独立任务
+        for (let i = 0; i < count; i++) {
+          try {
+            await generateOne(i);
+          } catch (err) {
+            failCount++;
+            console.error(`第 ${i + 1} 张生成失败:`, err);
+            // 如果是试用额度用完，停止后续任务
+            if (err.message && err.message.includes('体验额度已用完')) {
+              setStatus(err.message, 'error');
+              break;
             }
           }
         }
@@ -817,6 +906,11 @@
           count,
           message: msg
         });
+        
+        // 更新试用额度显示
+        if (!apiKey) {
+          await updateTrialQuota();
+        }
       } catch (err) {
         finishProgress(false);
         setStatus(err.message || '图片生成失败，请稍后重试。', 'error');

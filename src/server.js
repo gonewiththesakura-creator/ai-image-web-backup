@@ -81,8 +81,19 @@ db.exec(`
     PRIMARY KEY (item_id, client_id),
     FOREIGN KEY (item_id) REFERENCES gallery_items(id) ON DELETE CASCADE
   );
+  CREATE TABLE IF NOT EXISTS trial_usage (
+    fingerprint TEXT NOT NULL,
+    ip TEXT NOT NULL,
+    used_count INTEGER NOT NULL DEFAULT 0,
+    first_used_at INTEGER NOT NULL,
+    last_used_at INTEGER NOT NULL,
+    PRIMARY KEY (fingerprint, ip)
+  );
   CREATE INDEX IF NOT EXISTS idx_gallery_created ON gallery_items(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_gallery_hot ON gallery_items(likes DESC, views DESC, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_trial_fingerprint ON trial_usage(fingerprint);
+  CREATE INDEX IF NOT EXISTS idx_trial_ip ON trial_usage(ip);
+  CREATE INDEX IF NOT EXISTS idx_trial_last_used ON trial_usage(last_used_at);
 `);
 
 const seedCount = db.prepare('SELECT COUNT(*) AS count FROM gallery_items').get().count;
@@ -293,13 +304,102 @@ async function saveBase64Image(dataUrlOrBase64, format) {
   return { id, imageUrl: `/uploads/${filename}`, format: 'webp' };
 }
 
+// 试用额度检查和扣减
+function checkAndConsumeTrialQuota(fingerprint, ip) {
+  if (!fingerprint || !ip) return { allowed: false, reason: '缺少设备信息' };
+  
+  const now = Date.now();
+  const TRIAL_WINDOW_MS = 24 * 60 * 60 * 1000; // 24小时
+  const MAX_TRIAL_PER_FINGERPRINT = 2;
+  const MAX_FINGERPRINTS_PER_IP = 5;
+  
+  // 清理7天前的试用记录
+  db.prepare('DELETE FROM trial_usage WHERE last_used_at < ?').run(now - 7 * 24 * 60 * 60 * 1000);
+  
+  // 检查该指纹在24小时内的使用次数
+  const fpRecord = db.prepare('SELECT * FROM trial_usage WHERE fingerprint = ? AND ip = ?').get(fingerprint, ip);
+  
+  if (fpRecord) {
+    const timeSinceFirst = now - fpRecord.first_used_at;
+    if (timeSinceFirst < TRIAL_WINDOW_MS) {
+      if (fpRecord.used_count >= MAX_TRIAL_PER_FINGERPRINT) {
+        return { allowed: false, reason: '体验额度已用完，请注册获取 API Key', remaining: 0 };
+      }
+    } else {
+      // 超过24小时，重置计数
+      db.prepare('UPDATE trial_usage SET used_count = 1, first_used_at = ?, last_used_at = ? WHERE fingerprint = ? AND ip = ?')
+        .run(now, now, fingerprint, ip);
+      return { allowed: true, remaining: MAX_TRIAL_PER_FINGERPRINT - 1 };
+    }
+  }
+  
+  // 检查该IP在24小时内的不同指纹数量
+  const ipFingerprints = db.prepare(
+    'SELECT COUNT(DISTINCT fingerprint) as count FROM trial_usage WHERE ip = ? AND first_used_at > ?'
+  ).get(ip, now - TRIAL_WINDOW_MS);
+  
+  if (ipFingerprints.count >= MAX_FINGERPRINTS_PER_IP) {
+    return { allowed: false, reason: '该网络环境体验次数已达上限', remaining: 0 };
+  }
+  
+  // 扣减额度
+  if (fpRecord) {
+    db.prepare('UPDATE trial_usage SET used_count = used_count + 1, last_used_at = ? WHERE fingerprint = ? AND ip = ?')
+      .run(now, fingerprint, ip);
+    return { allowed: true, remaining: MAX_TRIAL_PER_FINGERPRINT - fpRecord.used_count - 1 };
+  } else {
+    db.prepare('INSERT INTO trial_usage (fingerprint, ip, used_count, first_used_at, last_used_at) VALUES (?, ?, 1, ?, ?)')
+      .run(fingerprint, ip, now, now);
+    return { allowed: true, remaining: MAX_TRIAL_PER_FINGERPRINT - 1 };
+  }
+}
+
+// 查询试用额度
+app.get('/api/trial-quota', (req, res) => {
+  const fingerprint = String(req.query?.fingerprint || '').slice(0, 128);
+  const ip = req.ip || req.connection.remoteAddress || '';
+  
+  if (!fingerprint) {
+    return res.json({ remaining: 0, total: 2, message: '缺少设备信息' });
+  }
+  
+  const now = Date.now();
+  const TRIAL_WINDOW_MS = 24 * 60 * 60 * 1000;
+  const MAX_TRIAL_PER_FINGERPRINT = 2;
+  
+  const fpRecord = db.prepare('SELECT * FROM trial_usage WHERE fingerprint = ? AND ip = ?').get(fingerprint, ip);
+  
+  if (!fpRecord) {
+    return res.json({ remaining: MAX_TRIAL_PER_FINGERPRINT, total: MAX_TRIAL_PER_FINGERPRINT, message: '可免费体验' });
+  }
+  
+  const timeSinceFirst = now - fpRecord.first_used_at;
+  if (timeSinceFirst >= TRIAL_WINDOW_MS) {
+    return res.json({ remaining: MAX_TRIAL_PER_FINGERPRINT, total: MAX_TRIAL_PER_FINGERPRINT, message: '额度已重置' });
+  }
+  
+  const remaining = Math.max(0, MAX_TRIAL_PER_FINGERPRINT - fpRecord.used_count);
+  return res.json({ remaining, total: MAX_TRIAL_PER_FINGERPRINT, message: remaining > 0 ? '可继续体验' : '体验额度已用完' });
+});
+
 app.post('/api/generate-image', limiter, async (req, res) => {
   try {
     const apiKey = normalizeApiKey(req.body?.apiKey);
     const rawPrompt = normalizePrompt(req.body?.prompt);
+    const fingerprint = String(req.body?.fingerprint || '').slice(0, 128);
+    const ip = req.ip || req.connection.remoteAddress || '';
 
-    if (!apiKey) throw publicError(400, '请输入 API Key。');
     if (!rawPrompt) throw publicError(400, '请输入图片描述。');
+    
+    // 如果没有 API Key，检查试用额度
+    let usingTrial = false;
+    if (!apiKey) {
+      const quota = checkAndConsumeTrialQuota(fingerprint, ip);
+      if (!quota.allowed) {
+        throw publicError(403, quota.reason);
+      }
+      usingTrial = true;
+    }
 
     const size = normalizeSize(req.body?.size);
     const quality = pickAllowed(req.body?.quality, ALLOWED_QUALITIES, 'auto');
@@ -310,6 +410,13 @@ app.post('/api/generate-image', limiter, async (req, res) => {
 
     const finalPrompt = `请把下面的用户输入理解为图片创作需求，并直接生成图片。不要输出文字、解释、对话或代码，只生成符合描述的图片。\n\n用户输入：\n${rawPrompt}`;
 
+    // 试用模式使用内置 API Key
+    const effectiveApiKey = usingTrial ? (process.env.TRIAL_API_KEY || apiKey) : apiKey;
+    
+    if (!effectiveApiKey) {
+      throw publicError(500, '试用服务暂时不可用，请输入 API Key 使用。');
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -317,7 +424,7 @@ app.post('/api/generate-image', limiter, async (req, res) => {
       method: 'POST',
       signal: controller.signal,
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${effectiveApiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
