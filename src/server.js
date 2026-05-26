@@ -310,7 +310,7 @@ function checkAndConsumeTrialQuota(fingerprint, ip) {
   
   const now = Date.now();
   const TRIAL_WINDOW_MS = 24 * 60 * 60 * 1000; // 24小时
-  const MAX_TRIAL_PER_FINGERPRINT = 10;
+  const MAX_TRIAL_PER_FINGERPRINT = 5;
   const MAX_FINGERPRINTS_PER_IP = 5;
   
   // 清理7天前的试用记录
@@ -365,7 +365,7 @@ app.get('/api/trial-quota', (req, res) => {
   
   const now = Date.now();
   const TRIAL_WINDOW_MS = 24 * 60 * 60 * 1000;
-  const MAX_TRIAL_PER_FINGERPRINT = 10;
+  const MAX_TRIAL_PER_FINGERPRINT = 5;
   
   const fpRecord = db.prepare('SELECT * FROM trial_usage WHERE fingerprint = ? AND ip = ?').get(fingerprint, ip);
   
