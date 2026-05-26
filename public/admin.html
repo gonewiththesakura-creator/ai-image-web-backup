@@ -56,6 +56,9 @@
     .row .name { color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .row .num { color:var(--blue); font-weight:700; }
     .row .sub { color:var(--muted); }
+    .metric-policy { margin:-8px 0 18px; color:var(--amber); font-size:13px; line-height:1.6; }
+    .repeat-badge { display:inline-block; margin-left:6px; padding:2px 7px; border-radius:999px; background:rgba(251,191,36,.16); color:var(--amber); font-size:11px; border:1px solid rgba(251,191,36,.28); }
+    .first-badge { display:inline-block; margin-left:6px; padding:2px 7px; border-radius:999px; background:rgba(52,211,153,.14); color:var(--green); font-size:11px; border:1px solid rgba(52,211,153,.25); }
     table { width:100%; border-collapse: collapse; font-size:12px; }
     th, td { padding:10px 8px; border-bottom:1px solid rgba(148,163,184,.14); text-align:left; vertical-align:top; }
     th { color:var(--muted); font-weight:600; }
@@ -107,10 +110,11 @@
       <div id="status" class="status hidden"></div>
 
       <section id="monitorSection">
+        <div class="metric-policy" id="metricPolicy">统计口径：同一 IP 每天只计 1 次；重复访问只在明细中标记，不计入访问总数。</div>
         <div class="stats">
-          <div class="stat-card"><div class="stat-value" id="todayRequests">0</div><div class="stat-label">今日请求</div><div class="stat-note" id="totalRequests">累计 0</div></div>
-          <div class="stat-card"><div class="stat-value" id="todayVisitors">0</div><div class="stat-label">今日访客</div><div class="stat-note" id="totalVisitors">累计 0</div></div>
-          <div class="stat-card"><div class="stat-value" id="activeVisitors5m">0</div><div class="stat-label">5 分钟活跃</div><div class="stat-note" id="todayPageViews">今日页面浏览 0</div></div>
+          <div class="stat-card"><div class="stat-value" id="todayRequests">0</div><div class="stat-label">今日访问 IP（日去重）</div><div class="stat-note" id="totalRequests">累计 0</div></div>
+          <div class="stat-card"><div class="stat-value" id="todayVisitors">0</div><div class="stat-label">今日匿名访客</div><div class="stat-note" id="totalVisitors">累计 0</div></div>
+          <div class="stat-card"><div class="stat-value" id="activeVisitors5m">0</div><div class="stat-label">5 分钟活跃 IP</div><div class="stat-note" id="todayPageViews">今日页面访问 0</div></div>
           <div class="stat-card"><div class="stat-value" id="generationsToday">0</div><div class="stat-label">今日成功生图</div><div class="stat-note" id="errorCount">错误 0</div></div>
           <div class="stat-card"><div class="stat-value" id="galleryItemCount">0</div><div class="stat-label">画廊作品</div><div class="stat-note">公开画廊总量</div></div>
           <div class="stat-card"><div class="stat-value" id="galleryLikeCount">0</div><div class="stat-label">画廊点赞</div><div class="stat-note">累计互动</div></div>
@@ -132,7 +136,7 @@
         </div>
         <div class="monitor-grid">
           <div class="panel"><h2>来源 Referer</h2><div id="refererList" class="list"></div></div>
-          <div class="panel"><h2>最近访问</h2><div style="overflow:auto;max-height:420px"><table><thead><tr><th>时间</th><th>路径</th><th>状态</th><th>设备</th><th>地区</th><th>访客</th></tr></thead><tbody id="recentRows"></tbody></table></div></div>
+          <div class="panel"><h2>最近访问</h2><div style="overflow:auto;max-height:420px"><table><thead><tr><th>时间</th><th>路径</th><th>状态</th><th>设备</th><th>地区</th><th>IP/访客</th><th>重复</th></tr></thead><tbody id="recentRows"></tbody></table></div></div>
         </div>
       </section>
 
@@ -218,17 +222,18 @@
     function renderMonitor(data) {
       const s = data.summary || {};
       $('todayRequests').textContent = fmt(s.todayRequests);
-      $('totalRequests').textContent = `累计 ${fmt(s.totalRequests)}`;
+      $('totalRequests').textContent = `累计 ${fmt(s.totalRequests)}｜原始 ${fmt(s.rawRequests)}｜重复 ${fmt(s.repeatRequests)}`;
       $('todayVisitors').textContent = fmt(s.todayVisitors);
-      $('totalVisitors').textContent = `累计 ${fmt(s.totalVisitors)}`;
+      $('totalVisitors').textContent = `累计 ${fmt(s.totalVisitors)}｜IP日 ${fmt(s.uniqueIpDays)}`;
       $('activeVisitors5m').textContent = fmt(s.activeVisitors5m);
-      $('todayPageViews').textContent = `今日页面浏览 ${fmt(s.todayPageViews)}`;
+      $('todayPageViews').textContent = `今日页面访问 ${fmt(s.todayPageViews)}｜原始 ${fmt(s.todayRawPageViews)}`;
       $('generationsToday').textContent = fmt(s.generationsToday);
-      $('errorCount').textContent = `错误 ${fmt(s.errorCount)}`;
+      $('errorCount').textContent = `错误 ${fmt(s.errorCount)}｜原始 ${fmt(s.rawErrorCount)}`;
       $('galleryItemCount').textContent = fmt(s.galleryItems);
       $('galleryLikeCount').textContent = fmt(s.galleryLikes);
       $('galleryViewCount').textContent = fmt(s.galleryViews);
       $('avgDurationMs').textContent = fmtMs(s.avgDurationMs);
+      $('metricPolicy').textContent = `统计口径：${data.metricPolicy || '同一 IP 每天只计 1 次；重复访问只在明细中标记，不计入访问总数。'}`;
       renderChart('hourlyChart', data.hourly || [], 'hour', 'requests');
       renderChart('dailyChart', data.daily || [], 'day', 'requests');
       renderList('deviceList', data.devices || []);
@@ -236,7 +241,12 @@
       renderList('timezoneList', data.timezones || []);
       renderList('pathList', data.topPaths || [], 'path');
       renderList('refererList', data.referrers || []);
-      $('recentRows').innerHTML = (data.recent || []).map(r => `<tr><td>${escapeHtml(fmtTime(r.createdAt))}</td><td>${escapeHtml(r.path)}</td><td>${r.status}</td><td>${escapeHtml(r.device_type)}</td><td>${escapeHtml(r.country || r.timezone || '未知')}</td><td>${escapeHtml(r.visitor)}</td></tr>`).join('') || '<tr><td colspan="6">暂无数据</td></tr>';
+      $('recentRows').innerHTML = (data.recent || []).map(r => {
+        const repeat = r.duplicateIpDay
+          ? `<span class="repeat-badge">同 IP 当日第 ${fmt(r.visitIndexForIpDay)} 次</span>`
+          : '<span class="first-badge">首次计数</span>';
+        return `<tr><td>${escapeHtml(fmtTime(r.createdAt))}</td><td>${escapeHtml(r.path)}</td><td>${r.status}</td><td>${escapeHtml(r.device_type)}</td><td>${escapeHtml(r.country || r.timezone || '未知')}</td><td>${escapeHtml(r.ipHash || '')}<br><span style="color:var(--muted)">${escapeHtml(r.visitor)}</span></td><td>${repeat}<br><span style="color:var(--muted)">当日同IP ${fmt(r.sameIpDayTotal)} 次</span></td></tr>`;
+      }).join('') || '<tr><td colspan="7">暂无数据</td></tr>';
     }
 
     function renderChart(id, rows, labelKey, valueKey) {
@@ -244,12 +254,12 @@
       $(id).innerHTML = rows.map(r => {
         const v = Number(r[valueKey] || 0);
         const h = Math.max(3, Math.round(v / max * 150));
-        return `<div class="bar-wrap" title="${escapeHtml(r[labelKey])}: ${v}"><div class="bar" style="height:${h}px"></div><div>${escapeHtml(String(r[labelKey]).slice(-5))}</div></div>`;
+        return `<div class="bar-wrap" title="${escapeHtml(r[labelKey])}: 去重 ${fmt(v)}，原始 ${fmt(r.rawRequests || r.rawPageViews || v)}，重复 ${fmt(r.repeatRequests || 0)}"><div class="bar" style="height:${h}px"></div><div>${escapeHtml(String(r[labelKey]).slice(-5))}</div></div>`;
       }).join('') || '<div style="color:var(--muted)">暂无趋势数据</div>';
     }
 
     function renderList(id, rows, nameKey = 'name') {
-      $(id).innerHTML = rows.map(r => `<div class="row"><div class="name" title="${escapeHtml(r[nameKey])}">${escapeHtml(r[nameKey])}</div><div class="num">${fmt(r.count)}</div><div class="sub">访客 ${fmt(r.visitors || 0)}</div></div>`).join('') || '<div style="color:var(--muted)">暂无数据</div>';
+      $(id).innerHTML = rows.map(r => `<div class="row"><div class="name" title="${escapeHtml(r[nameKey])}">${escapeHtml(r[nameKey])}</div><div class="num">${fmt(r.count)}</div><div class="sub">原始 ${fmt(r.rawCount || r.count)}｜重复 ${fmt(r.repeatCount || 0)}${r.visitors !== undefined ? `｜IP ${fmt(r.visitors || 0)}` : ''}</div></div>`).join('') || '<div style="color:var(--muted)">暂无数据</div>';
     }
 
     async function loadGallery(append = false) {

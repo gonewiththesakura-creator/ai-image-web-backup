@@ -234,27 +234,42 @@ app.get('/api/admin/monitor', (req, res) => {
   const today = todayStart.getTime();
   const fiveMinutesAgo = now - 5 * 60 * 1000;
   const pagePathWhere = `path NOT LIKE '/api/%' AND path != '/client/pageview'`;
+  const ipDayExpr = `ip_hash || '|' || date(created_at / 1000, 'unixepoch', 'localtime')`;
+  const uniqueIpDayWhere = `COUNT(DISTINCT ${ipDayExpr})`;
 
   const summary = {
-    totalRequests: countWhere(''),
+    // 访问口径：同一 IP 每天只计 1 次，重复访问不累加进总访问数。
+    totalRequests: db.prepare(`SELECT ${uniqueIpDayWhere} AS count FROM access_logs`).get().count || 0,
+    rawRequests: countWhere(''),
+    repeatRequests: Math.max(0, countWhere('') - (db.prepare(`SELECT ${uniqueIpDayWhere} AS count FROM access_logs`).get().count || 0)),
     totalVisitors: db.prepare('SELECT COUNT(DISTINCT visitor_id) AS count FROM access_logs').get().count || 0,
-    todayRequests: countWhere('WHERE created_at >= ?', [today]),
+    uniqueIpDays: db.prepare(`SELECT ${uniqueIpDayWhere} AS count FROM access_logs`).get().count || 0,
+    todayRequests: db.prepare(`SELECT ${uniqueIpDayWhere} AS count FROM access_logs WHERE created_at >= ?`).get(today).count || 0,
+    todayRawRequests: countWhere('WHERE created_at >= ?', [today]),
+    todayRepeatRequests: 0,
     todayVisitors: db.prepare('SELECT COUNT(DISTINCT visitor_id) AS count FROM access_logs WHERE created_at >= ?').get(today).count || 0,
-    todayPageViews: db.prepare(`SELECT COUNT(*) AS count FROM access_logs WHERE created_at >= ? AND (${pagePathWhere} OR path = '/client/pageview')`).get(today).count || 0,
-    activeVisitors5m: db.prepare('SELECT COUNT(DISTINCT visitor_id) AS count FROM access_logs WHERE created_at >= ?').get(fiveMinutesAgo).count || 0,
+    todayPageViews: db.prepare(`SELECT COUNT(DISTINCT ${ipDayExpr}) AS count FROM access_logs WHERE created_at >= ? AND (${pagePathWhere} OR path = '/client/pageview')`).get(today).count || 0,
+    todayRawPageViews: db.prepare(`SELECT COUNT(*) AS count FROM access_logs WHERE created_at >= ? AND (${pagePathWhere} OR path = '/client/pageview')`).get(today).count || 0,
+    activeVisitors5m: db.prepare('SELECT COUNT(DISTINCT ip_hash) AS count FROM access_logs WHERE created_at >= ?').get(fiveMinutesAgo).count || 0,
     avgDurationMs: Math.round(db.prepare('SELECT AVG(duration_ms) AS avg FROM access_logs WHERE created_at >= ?').get(since).avg || 0),
-    errorCount: countWhere('WHERE created_at >= ? AND status >= 400', [since]),
+    errorCount: db.prepare(`SELECT COUNT(DISTINCT ${ipDayExpr}) AS count FROM access_logs WHERE created_at >= ? AND status >= 400`).get(since).count || 0,
+    rawErrorCount: countWhere('WHERE created_at >= ? AND status >= 400', [since]),
     galleryItems: db.prepare('SELECT COUNT(*) AS count FROM gallery_items').get().count || 0,
     galleryLikes: db.prepare('SELECT COALESCE(SUM(likes), 0) AS count FROM gallery_items').get().count || 0,
     galleryViews: db.prepare('SELECT COALESCE(SUM(views), 0) AS count FROM gallery_items').get().count || 0,
-    generationsToday: db.prepare("SELECT COUNT(*) AS count FROM access_logs WHERE created_at >= ? AND path = '/api/generate-image' AND status < 400").get(today).count || 0
+    generationsToday: db.prepare(`SELECT COUNT(DISTINCT ${ipDayExpr}) AS count FROM access_logs WHERE created_at >= ? AND path = '/api/generate-image' AND status < 400`).get(today).count || 0,
+    rawGenerationsToday: db.prepare("SELECT COUNT(*) AS count FROM access_logs WHERE created_at >= ? AND path = '/api/generate-image' AND status < 400").get(today).count || 0
   };
+  summary.todayRepeatRequests = Math.max(0, summary.todayRawRequests - summary.todayRequests);
 
   const daily = db.prepare(`
     SELECT date(created_at / 1000, 'unixepoch', 'localtime') AS day,
-           COUNT(*) AS requests,
+           COUNT(DISTINCT ${ipDayExpr}) AS requests,
+           COUNT(*) AS rawRequests,
+           MAX(COUNT(*) - COUNT(DISTINCT ${ipDayExpr}), 0) AS repeatRequests,
            COUNT(DISTINCT visitor_id) AS visitors,
-           SUM(CASE WHEN ${pagePathWhere} OR path = '/client/pageview' THEN 1 ELSE 0 END) AS pageViews
+           COUNT(DISTINCT CASE WHEN ${pagePathWhere} OR path = '/client/pageview' THEN ${ipDayExpr} END) AS pageViews,
+           SUM(CASE WHEN ${pagePathWhere} OR path = '/client/pageview' THEN 1 ELSE 0 END) AS rawPageViews
     FROM access_logs
     WHERE created_at >= ?
     GROUP BY day
@@ -263,7 +278,10 @@ app.get('/api/admin/monitor', (req, res) => {
 
   const hourly = db.prepare(`
     SELECT strftime('%m-%d %H:00', created_at / 1000, 'unixepoch', 'localtime') AS hour,
-           COUNT(*) AS requests, COUNT(DISTINCT visitor_id) AS visitors
+           COUNT(DISTINCT ${ipDayExpr}) AS requests,
+           COUNT(*) AS rawRequests,
+           MAX(COUNT(*) - COUNT(DISTINCT ${ipDayExpr}), 0) AS repeatRequests,
+           COUNT(DISTINCT ip_hash) AS visitors
     FROM access_logs
     WHERE created_at >= ?
     GROUP BY hour
@@ -271,49 +289,109 @@ app.get('/api/admin/monitor', (req, res) => {
   `).all(now - 24 * 60 * 60 * 1000);
 
   const topPaths = db.prepare(`
-    SELECT path, COUNT(*) AS count, COUNT(DISTINCT visitor_id) AS visitors
+    SELECT path,
+           COUNT(DISTINCT ${ipDayExpr}) AS count,
+           COUNT(*) AS rawCount,
+           MAX(COUNT(*) - COUNT(DISTINCT ${ipDayExpr}), 0) AS repeatCount,
+           COUNT(DISTINCT ip_hash) AS visitors
     FROM access_logs
     WHERE created_at >= ?
     GROUP BY path
-    ORDER BY count DESC
+    ORDER BY count DESC, rawCount DESC
     LIMIT 12
   `).all(since);
 
   const countries = db.prepare(`
-    SELECT COALESCE(NULLIF(country, ''), '未知') AS name, COUNT(*) AS count, COUNT(DISTINCT visitor_id) AS visitors
+    SELECT COALESCE(NULLIF(country, ''), '未知') AS name,
+           COUNT(DISTINCT ${ipDayExpr}) AS count,
+           COUNT(*) AS rawCount,
+           MAX(COUNT(*) - COUNT(DISTINCT ${ipDayExpr}), 0) AS repeatCount,
+           COUNT(DISTINCT ip_hash) AS visitors
     FROM access_logs WHERE created_at >= ?
-    GROUP BY name ORDER BY count DESC LIMIT 12
+    GROUP BY name ORDER BY count DESC, rawCount DESC LIMIT 12
   `).all(since);
 
   const timezones = db.prepare(`
-    SELECT COALESCE(NULLIF(timezone, ''), '未知') AS name, COUNT(*) AS count, COUNT(DISTINCT visitor_id) AS visitors
+    SELECT COALESCE(NULLIF(timezone, ''), '未知') AS name,
+           COUNT(DISTINCT ${ipDayExpr}) AS count,
+           COUNT(*) AS rawCount,
+           MAX(COUNT(*) - COUNT(DISTINCT ${ipDayExpr}), 0) AS repeatCount,
+           COUNT(DISTINCT ip_hash) AS visitors
     FROM access_logs WHERE created_at >= ?
-    GROUP BY name ORDER BY count DESC LIMIT 12
+    GROUP BY name ORDER BY count DESC, rawCount DESC LIMIT 12
   `).all(since);
 
   const devices = db.prepare(`
-    SELECT device_type AS name, COUNT(*) AS count, COUNT(DISTINCT visitor_id) AS visitors
+    SELECT device_type AS name,
+           COUNT(DISTINCT ${ipDayExpr}) AS count,
+           COUNT(*) AS rawCount,
+           MAX(COUNT(*) - COUNT(DISTINCT ${ipDayExpr}), 0) AS repeatCount,
+           COUNT(DISTINCT ip_hash) AS visitors
     FROM access_logs WHERE created_at >= ?
-    GROUP BY device_type ORDER BY count DESC
+    GROUP BY device_type ORDER BY count DESC, rawCount DESC
   `).all(since);
 
   const referrers = db.prepare(`
-    SELECT COALESCE(NULLIF(referer, ''), '直接访问') AS name, COUNT(*) AS count
+    SELECT COALESCE(NULLIF(referer, ''), '直接访问') AS name,
+           COUNT(DISTINCT ${ipDayExpr}) AS count,
+           COUNT(*) AS rawCount,
+           MAX(COUNT(*) - COUNT(DISTINCT ${ipDayExpr}), 0) AS repeatCount
     FROM access_logs WHERE created_at >= ?
-    GROUP BY name ORDER BY count DESC LIMIT 10
+    GROUP BY name ORDER BY count DESC, rawCount DESC LIMIT 10
   `).all(since);
 
-  const recent = db.prepare(`
-    SELECT created_at, method, path, status, duration_ms, visitor_id, device_type,
+  const recentRows = db.prepare(`
+    SELECT id, created_at, method, path, status, duration_ms, visitor_id, ip_hash, device_type,
+           date(created_at / 1000, 'unixepoch', 'localtime') AS access_day,
            COALESCE(NULLIF(country, ''), '未知') AS country,
            COALESCE(NULLIF(timezone, ''), '') AS timezone,
            COALESCE(NULLIF(language, ''), '') AS language
     FROM access_logs
     ORDER BY created_at DESC
     LIMIT 50
-  `).all().map((row) => ({ ...row, createdAt: new Date(row.created_at).toISOString(), visitor: row.visitor_id.slice(0, 8) }));
+  `).all();
 
-  res.json({ ok: true, days, summary, daily, hourly, topPaths, countries, timezones, devices, referrers, recent });
+  const duplicateStmt = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM access_logs
+    WHERE ip_hash = ?
+      AND date(created_at / 1000, 'unixepoch', 'localtime') = ?
+      AND created_at <= ?
+  `);
+  const totalSameIpDayStmt = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM access_logs
+    WHERE ip_hash = ?
+      AND date(created_at / 1000, 'unixepoch', 'localtime') = ?
+  `);
+  const recent = recentRows.map((row) => {
+    const visitIndexForIpDay = duplicateStmt.get(row.ip_hash, row.access_day, row.created_at).count || 0;
+    const sameIpDayTotal = totalSameIpDayStmt.get(row.ip_hash, row.access_day).count || 0;
+    return {
+      ...row,
+      createdAt: new Date(row.created_at).toISOString(),
+      visitor: row.visitor_id.slice(0, 8),
+      ipHash: row.ip_hash.slice(0, 8),
+      visitIndexForIpDay,
+      sameIpDayTotal,
+      duplicateIpDay: visitIndexForIpDay > 1
+    };
+  });
+
+  res.json({
+    ok: true,
+    days,
+    metricPolicy: '同一 IP 每天只计 1 次；重复访问只在明细中标记，不计入访问总数。',
+    summary,
+    daily,
+    hourly,
+    topPaths,
+    countries,
+    timezones,
+    devices,
+    referrers,
+    recent
+  });
 });
 
 function normalizeApiKey(value) {
