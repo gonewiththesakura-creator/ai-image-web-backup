@@ -90,7 +90,6 @@
     .drawer-nav button { width: 100%; justify-content: flex-start; border: 1px solid transparent; border-radius: 16px; background: rgba(2, 6, 23, .36); box-shadow: none; color: #cbd5e1; padding: 13px 14px; }
     .drawer-nav button.active { background: linear-gradient(135deg, rgba(79,140,255,.92), rgba(37,99,235,.88)); color: #fff; border-color: rgba(191,219,254,.26); box-shadow: 0 14px 32px rgba(37,99,235,.25); }
     .drawer-nav button .nav-emoji { width: 22px; text-align: center; }
-    .drawer-hint { margin-top: 14px; color: var(--muted); font-size: 12px; line-height: 1.55; }
     .view-panel { display: none; }
     .view-panel.active { display: block; }
     .hero { display: grid; grid-template-columns: 430px 1fr; gap: 22px; align-items: start; }
@@ -221,7 +220,7 @@
       .app-shell { grid-template-columns: 1fr; gap: 14px; }
       .side-drawer { position: sticky; top: 0; z-index: 12; border-radius: 0 0 18px 18px; margin: 0 -18px; }
       .drawer-nav { grid-template-columns: 1fr 1fr; }
-      .drawer-hint, .drawer-title { display: none; }
+      .drawer-title { display: none; }
       .hero { grid-template-columns: 1fr; }
       .form { position: static; }
       header { align-items: flex-start; flex-direction: column; }
@@ -262,7 +261,6 @@
           <button type="button" class="active" data-view-tab="draw"><span class="nav-emoji">🎨</span><span>绘图</span></button>
           <button type="button" data-view-tab="gallery"><span class="nav-emoji">🖼️</span><span>画廊</span></button>
         </nav>
-        <div class="drawer-hint">绘图区和画廊已分开，左侧可随时切换。</div>
       </aside>
 
       <div class="workspace">
