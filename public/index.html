@@ -724,9 +724,8 @@
             <button type="button" class="round-action like-btn ${item.liked ? 'liked' : ''}" title="点赞">❤</button>
             <div class="round-label like-count">${item.likes}</div>
             <button type="button" class="round-action use-btn" title="套用提示词">✦</button>
-            <div class="round-label">套用</div>
+            <div class="round-label">套用 ${item.views}</div>
             <button type="button" class="round-action open-btn" title="查看大图">↗</button>
-            <div class="round-label">${item.views}</div>
           </div>
         `;
         card.querySelector('img').onclick = () => openModal(item);
