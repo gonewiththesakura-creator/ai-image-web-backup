@@ -6,3 +6,4 @@ public/uploads/
 .env
 .env.*
 *.log
+backups/

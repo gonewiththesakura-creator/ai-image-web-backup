@@ -944,6 +944,21 @@
       }
     });
 
+    try {
+      const payload = {
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+        language: navigator.language || '',
+        screenWidth: window.screen?.width || 0,
+        screenHeight: window.screen?.height || 0
+      };
+      const body = JSON.stringify(payload);
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/api/analytics/beacon', new Blob([body], { type: 'application/json' }));
+      } else {
+        fetch('/api/analytics/beacon', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
+      }
+    } catch {}
+
     loadGallery('hot');
   </script>
 </body>

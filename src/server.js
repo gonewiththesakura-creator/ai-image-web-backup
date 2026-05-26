@@ -89,11 +89,36 @@ db.exec(`
     last_used_at INTEGER NOT NULL,
     PRIMARY KEY (fingerprint, ip)
   );
+  CREATE TABLE IF NOT EXISTS access_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at INTEGER NOT NULL,
+    method TEXT NOT NULL,
+    path TEXT NOT NULL,
+    status INTEGER NOT NULL DEFAULT 0,
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    visitor_id TEXT NOT NULL,
+    ip_hash TEXT NOT NULL,
+    user_agent TEXT NOT NULL DEFAULT '',
+    device_type TEXT NOT NULL DEFAULT 'unknown',
+    referer TEXT NOT NULL DEFAULT '',
+    country TEXT NOT NULL DEFAULT '',
+    region TEXT NOT NULL DEFAULT '',
+    city TEXT NOT NULL DEFAULT '',
+    timezone TEXT NOT NULL DEFAULT '',
+    language TEXT NOT NULL DEFAULT '',
+    screen TEXT NOT NULL DEFAULT '',
+    is_bot INTEGER NOT NULL DEFAULT 0
+  );
   CREATE INDEX IF NOT EXISTS idx_gallery_created ON gallery_items(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_gallery_hot ON gallery_items(likes DESC, views DESC, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_trial_fingerprint ON trial_usage(fingerprint);
   CREATE INDEX IF NOT EXISTS idx_trial_ip ON trial_usage(ip);
   CREATE INDEX IF NOT EXISTS idx_trial_last_used ON trial_usage(last_used_at);
+  CREATE INDEX IF NOT EXISTS idx_access_created ON access_logs(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_access_path ON access_logs(path);
+  CREATE INDEX IF NOT EXISTS idx_access_visitor ON access_logs(visitor_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_access_country ON access_logs(country);
+  CREATE INDEX IF NOT EXISTS idx_access_timezone ON access_logs(timezone);
 `);
 
 const seedCount = db.prepare('SELECT COUNT(*) AS count FROM gallery_items').get().count;
@@ -136,6 +161,11 @@ app.use(helmet({
 }));
 app.use(cors({ origin: false }));
 app.use(express.json({ limit: '20mb' }));
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+  res.on('finish', () => recordAccessLog(req, res, startedAt));
+  next();
+});
 app.use(express.static(path.join(__dirname, '..', 'public'), {
   extensions: ['html'],
   maxAge: '1h'
@@ -167,6 +197,123 @@ app.get('/api/admin/verify', (req, res) => {
     return res.status(403).json({ error: '管理员密码错误。' });
   }
   res.json({ ok: true });
+});
+
+function requireAdmin(req, res) {
+  const password = req.body?.password || req.headers['x-admin-password'];
+  if (password !== ADMIN_PASSWORD) {
+    res.status(403).json({ error: '管理员密码错误。' });
+    return false;
+  }
+  return true;
+}
+
+function countWhere(where, params = []) {
+  return db.prepare(`SELECT COUNT(*) AS count FROM access_logs ${where}`).get(...params).count || 0;
+}
+
+app.post('/api/analytics/beacon', (req, res) => {
+  const startedAt = Date.now();
+  recordAccessLog(req, res, startedAt, {
+    path: '/client/pageview',
+    status: 204,
+    timezone: String(req.body?.timezone || '').slice(0, 120),
+    language: String(req.body?.language || '').slice(0, 120),
+    screen: `${Number(req.body?.screenWidth || 0) || ''}x${Number(req.body?.screenHeight || 0) || ''}`.replace(/^x$/, '')
+  });
+  res.status(204).end();
+});
+
+app.get('/api/admin/monitor', (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const days = Math.min(Math.max(Number(req.query?.days || 7), 1), 90);
+  const now = Date.now();
+  const since = now - days * 24 * 60 * 60 * 1000;
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const today = todayStart.getTime();
+  const fiveMinutesAgo = now - 5 * 60 * 1000;
+  const pagePathWhere = `path NOT LIKE '/api/%' AND path != '/client/pageview'`;
+
+  const summary = {
+    totalRequests: countWhere(''),
+    totalVisitors: db.prepare('SELECT COUNT(DISTINCT visitor_id) AS count FROM access_logs').get().count || 0,
+    todayRequests: countWhere('WHERE created_at >= ?', [today]),
+    todayVisitors: db.prepare('SELECT COUNT(DISTINCT visitor_id) AS count FROM access_logs WHERE created_at >= ?').get(today).count || 0,
+    todayPageViews: db.prepare(`SELECT COUNT(*) AS count FROM access_logs WHERE created_at >= ? AND (${pagePathWhere} OR path = '/client/pageview')`).get(today).count || 0,
+    activeVisitors5m: db.prepare('SELECT COUNT(DISTINCT visitor_id) AS count FROM access_logs WHERE created_at >= ?').get(fiveMinutesAgo).count || 0,
+    avgDurationMs: Math.round(db.prepare('SELECT AVG(duration_ms) AS avg FROM access_logs WHERE created_at >= ?').get(since).avg || 0),
+    errorCount: countWhere('WHERE created_at >= ? AND status >= 400', [since]),
+    galleryItems: db.prepare('SELECT COUNT(*) AS count FROM gallery_items').get().count || 0,
+    galleryLikes: db.prepare('SELECT COALESCE(SUM(likes), 0) AS count FROM gallery_items').get().count || 0,
+    galleryViews: db.prepare('SELECT COALESCE(SUM(views), 0) AS count FROM gallery_items').get().count || 0,
+    generationsToday: db.prepare("SELECT COUNT(*) AS count FROM access_logs WHERE created_at >= ? AND path = '/api/generate-image' AND status < 400").get(today).count || 0
+  };
+
+  const daily = db.prepare(`
+    SELECT date(created_at / 1000, 'unixepoch', 'localtime') AS day,
+           COUNT(*) AS requests,
+           COUNT(DISTINCT visitor_id) AS visitors,
+           SUM(CASE WHEN ${pagePathWhere} OR path = '/client/pageview' THEN 1 ELSE 0 END) AS pageViews
+    FROM access_logs
+    WHERE created_at >= ?
+    GROUP BY day
+    ORDER BY day ASC
+  `).all(since);
+
+  const hourly = db.prepare(`
+    SELECT strftime('%m-%d %H:00', created_at / 1000, 'unixepoch', 'localtime') AS hour,
+           COUNT(*) AS requests, COUNT(DISTINCT visitor_id) AS visitors
+    FROM access_logs
+    WHERE created_at >= ?
+    GROUP BY hour
+    ORDER BY hour ASC
+  `).all(now - 24 * 60 * 60 * 1000);
+
+  const topPaths = db.prepare(`
+    SELECT path, COUNT(*) AS count, COUNT(DISTINCT visitor_id) AS visitors
+    FROM access_logs
+    WHERE created_at >= ?
+    GROUP BY path
+    ORDER BY count DESC
+    LIMIT 12
+  `).all(since);
+
+  const countries = db.prepare(`
+    SELECT COALESCE(NULLIF(country, ''), '未知') AS name, COUNT(*) AS count, COUNT(DISTINCT visitor_id) AS visitors
+    FROM access_logs WHERE created_at >= ?
+    GROUP BY name ORDER BY count DESC LIMIT 12
+  `).all(since);
+
+  const timezones = db.prepare(`
+    SELECT COALESCE(NULLIF(timezone, ''), '未知') AS name, COUNT(*) AS count, COUNT(DISTINCT visitor_id) AS visitors
+    FROM access_logs WHERE created_at >= ?
+    GROUP BY name ORDER BY count DESC LIMIT 12
+  `).all(since);
+
+  const devices = db.prepare(`
+    SELECT device_type AS name, COUNT(*) AS count, COUNT(DISTINCT visitor_id) AS visitors
+    FROM access_logs WHERE created_at >= ?
+    GROUP BY device_type ORDER BY count DESC
+  `).all(since);
+
+  const referrers = db.prepare(`
+    SELECT COALESCE(NULLIF(referer, ''), '直接访问') AS name, COUNT(*) AS count
+    FROM access_logs WHERE created_at >= ?
+    GROUP BY name ORDER BY count DESC LIMIT 10
+  `).all(since);
+
+  const recent = db.prepare(`
+    SELECT created_at, method, path, status, duration_ms, visitor_id, device_type,
+           COALESCE(NULLIF(country, ''), '未知') AS country,
+           COALESCE(NULLIF(timezone, ''), '') AS timezone,
+           COALESCE(NULLIF(language, ''), '') AS language
+    FROM access_logs
+    ORDER BY created_at DESC
+    LIMIT 50
+  `).all().map((row) => ({ ...row, createdAt: new Date(row.created_at).toISOString(), visitor: row.visitor_id.slice(0, 8) }));
+
+  res.json({ ok: true, days, summary, daily, hourly, topPaths, countries, timezones, devices, referrers, recent });
 });
 
 function normalizeApiKey(value) {
@@ -235,8 +382,88 @@ function publicError(status, message) {
 }
 
 function clientId(req) {
-  const raw = `${req.ip || ''}|${req.get('user-agent') || ''}`;
+  const raw = `${getClientIp(req)}|${req.get('user-agent') || ''}`;
   return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 32);
+}
+
+function getClientIp(req) {
+  const forwarded = String(req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || '');
+  return forwarded.split(',')[0].trim() || req.ip || req.connection?.remoteAddress || '';
+}
+
+function hashIp(ip) {
+  return crypto.createHash('sha256').update(String(ip || '')).digest('hex').slice(0, 32);
+}
+
+function detectDeviceType(userAgent) {
+  const ua = String(userAgent || '').toLowerCase();
+  if (/bot|crawler|spider|slurp|bingpreview|curl|wget/.test(ua)) return 'bot';
+  if (/ipad|tablet/.test(ua)) return 'tablet';
+  if (/mobile|iphone|android|phone/.test(ua)) return 'mobile';
+  if (ua) return 'desktop';
+  return 'unknown';
+}
+
+function cleanHeader(value, max = 120) {
+  return String(value || '').replace(/[\r\n\t]/g, ' ').trim().slice(0, max);
+}
+
+function normalizeMonitorPath(value) {
+  const raw = String(value || '/').split('?')[0] || '/';
+  if (raw.startsWith('/uploads/')) return '/uploads/*';
+  if (raw.startsWith('/assets/')) return '/assets/*';
+  return raw.slice(0, 200);
+}
+
+function shouldLogRequest(req) {
+  const pathname = normalizeMonitorPath(req.path || req.url);
+  if (pathname === '/health') return false;
+  if (pathname === '/api/analytics/beacon') return false;
+  if (pathname === '/favicon.ico') return false;
+  if (pathname === '/assets/*') return false;
+  if (pathname === '/uploads/*') return false;
+  if (/\.(css|js|map|ico|png|jpe?g|webp|svg|woff2?)$/i.test(pathname)) return false;
+  return true;
+}
+
+const insertAccessLog = db.prepare(`
+  INSERT INTO access_logs (
+    created_at, method, path, status, duration_ms, visitor_id, ip_hash,
+    user_agent, device_type, referer, country, region, city, timezone, language, screen, is_bot
+  ) VALUES (
+    @created_at, @method, @path, @status, @duration_ms, @visitor_id, @ip_hash,
+    @user_agent, @device_type, @referer, @country, @region, @city, @timezone, @language, @screen, @is_bot
+  )
+`);
+
+function recordAccessLog(req, res, startedAt, extra = {}) {
+  try {
+    if (!shouldLogRequest(req)) return;
+    const ip = getClientIp(req);
+    const userAgent = cleanHeader(req.get('user-agent'), 500);
+    const deviceType = extra.deviceType || detectDeviceType(userAgent);
+    insertAccessLog.run({
+      created_at: Date.now(),
+      method: String(req.method || 'GET').slice(0, 12),
+      path: normalizeMonitorPath(extra.path || req.path || req.url),
+      status: Number(extra.status || res.statusCode || 0),
+      duration_ms: Math.max(0, Date.now() - startedAt),
+      visitor_id: clientId(req),
+      ip_hash: hashIp(ip),
+      user_agent: userAgent,
+      device_type: deviceType,
+      referer: cleanHeader(req.get('referer'), 500),
+      country: cleanHeader(req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || req.headers['x-country'], 80),
+      region: cleanHeader(req.headers['x-vercel-ip-country-region'] || req.headers['x-region'], 120),
+      city: cleanHeader(req.headers['x-vercel-ip-city'] || req.headers['x-city'], 120),
+      timezone: cleanHeader(extra.timezone || req.headers['x-timezone'], 120),
+      language: cleanHeader(extra.language || req.get('accept-language'), 180),
+      screen: cleanHeader(extra.screen, 40),
+      is_bot: deviceType === 'bot' ? 1 : 0
+    });
+  } catch (err) {
+    console.warn('[access-log] failed:', err?.message || err);
+  }
 }
 
 function userIdFromApiKey(apiKey) {
@@ -360,7 +587,7 @@ app.get('/api/trial-quota', (req, res) => {
   const ip = req.ip || req.connection.remoteAddress || '';
   
   if (!fingerprint) {
-    return res.json({ remaining: 0, total: 2, message: '缺少设备信息' });
+    return res.json({ remaining: 0, total: 5, message: '缺少设备信息' });
   }
   
   const now = Date.now();
