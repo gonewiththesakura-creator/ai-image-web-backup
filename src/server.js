@@ -29,12 +29,27 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123456';
 
 const ALLOWED_SIZES = new Set([
   '1024x1024',
-  '1024x1536',
   '1536x1024',
+  '1024x1536',
+  '2048x2048',
+  '2048x1152',
+  '1152x2048',
+  '4096x4096',
+  '4096x2304',
+  '2304x4096',
   'auto'
 ]);
 
+const SIZE_ALIASES = {
+  '1:1': '1024x1024',
+  '3:2': '1536x1024',
+  '2:3': '1024x1536',
+  '16:9': '2048x1152',
+  '9:16': '1152x2048'
+};
+
 const ALLOWED_QUALITIES = new Set(['auto', 'low', 'medium', 'high']);
+const OUTPUT_MODES = new Set(['standard', '2k', '4k']);
 const ALLOWED_FORMATS = new Set(['png', 'jpeg', 'webp']);
 const ALLOWED_SORTS = new Set(['hot', 'new']);
 const IMAGE_MIME_BY_FORMAT = {
@@ -163,6 +178,45 @@ function normalizeCount(value) {
   return Math.min(Math.max(n, 1), 4);
 }
 
+function normalizeSize(value) {
+  if (typeof value !== 'string') return '1024x1024';
+  const normalized = value.trim().toLowerCase();
+  const aliased = SIZE_ALIASES[normalized] || normalized;
+  return ALLOWED_SIZES.has(aliased) ? aliased : '1024x1024';
+}
+
+function normalizeOutputMode(value) {
+  if (typeof value !== 'string') return 'standard';
+  const normalized = value.trim().toLowerCase();
+  return OUTPUT_MODES.has(normalized) ? normalized : 'standard';
+}
+
+function upscaleDimensions(size, mode) {
+  if (!size || size === 'auto' || mode === 'standard') return size;
+  const parts = size.split('x').map((item) => Number(item));
+  if (parts.length !== 2 || parts.some((item) => !Number.isFinite(item) || item <= 0)) return size;
+  const [width, height] = parts;
+
+  const limitLongestEdge = (targetLongestEdge) => {
+    const longest = Math.max(width, height);
+    if (longest <= targetLongestEdge) return `${width}x${height}`;
+    const ratio = targetLongestEdge / longest;
+    const scaledWidth = Math.max(1, Math.round(width * ratio));
+    const scaledHeight = Math.max(1, Math.round(height * ratio));
+    return `${scaledWidth}x${scaledHeight}`;
+  };
+
+  if (mode === '4k') {
+    return limitLongestEdge(3840);
+  }
+
+  if (mode === '2k') {
+    return limitLongestEdge(2048);
+  }
+
+  return size;
+}
+
 function publicError(status, message) {
   const err = new Error(message);
   err.status = status;
@@ -247,10 +301,12 @@ app.post('/api/generate-image', limiter, async (req, res) => {
     if (!apiKey) throw publicError(400, '请输入 API Key。');
     if (!rawPrompt) throw publicError(400, '请输入图片描述。');
 
-    const size = pickAllowed(req.body?.size, ALLOWED_SIZES, '1024x1024');
+    const size = normalizeSize(req.body?.size);
     const quality = pickAllowed(req.body?.quality, ALLOWED_QUALITIES, 'auto');
+    const outputMode = normalizeOutputMode(req.body?.outputMode);
     const output_format = pickAllowed(req.body?.format, ALLOWED_FORMATS, 'png');
     const n = normalizeCount(req.body?.n);
+    const finalSize = upscaleDimensions(size, outputMode);
 
     const finalPrompt = `请把下面的用户输入理解为图片创作需求，并直接生成图片。不要输出文字、解释、对话或代码，只生成符合描述的图片。\n\n用户输入：\n${rawPrompt}`;
 
@@ -267,7 +323,7 @@ app.post('/api/generate-image', limiter, async (req, res) => {
       body: JSON.stringify({
         model: IMAGE_MODEL,
         prompt: finalPrompt,
-        size,
+        size: finalSize,
         quality,
         output_format,
         n
