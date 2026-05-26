@@ -115,7 +115,10 @@
           <div class="stat-card"><div class="stat-value" id="todayRequests">0</div><div class="stat-label">今日访问 IP（日去重）</div><div class="stat-note" id="totalRequests">累计 0</div></div>
           <div class="stat-card"><div class="stat-value" id="todayVisitors">0</div><div class="stat-label">今日匿名访客</div><div class="stat-note" id="totalVisitors">累计 0</div></div>
           <div class="stat-card"><div class="stat-value" id="activeVisitors5m">0</div><div class="stat-label">5 分钟活跃 IP</div><div class="stat-note" id="todayPageViews">今日页面访问 0</div></div>
-          <div class="stat-card"><div class="stat-value" id="generationsToday">0</div><div class="stat-label">今日成功生图</div><div class="stat-note" id="errorCount">错误 0</div></div>
+          <div class="stat-card"><div class="stat-value" id="generationsToday">0</div><div class="stat-label">今日作画次数</div><div class="stat-note" id="errorCount">错误 0</div></div>
+          <div class="stat-card"><div class="stat-value" id="generationsWeek">0</div><div class="stat-label">本周作画次数</div><div class="stat-note" id="generationsWeekRaw">原始 0</div></div>
+          <div class="stat-card"><div class="stat-value" id="generationsMonth">0</div><div class="stat-label">本月作画次数</div><div class="stat-note" id="generationsMonthRaw">原始 0</div></div>
+          <div class="stat-card"><div class="stat-value" id="totalGenerations">0</div><div class="stat-label">累计作画次数</div><div class="stat-note" id="totalGenerationsRaw">原始 0</div></div>
           <div class="stat-card"><div class="stat-value" id="galleryItemCount">0</div><div class="stat-label">画廊作品</div><div class="stat-note">公开画廊总量</div></div>
           <div class="stat-card"><div class="stat-value" id="galleryLikeCount">0</div><div class="stat-label">画廊点赞</div><div class="stat-note">累计互动</div></div>
           <div class="stat-card"><div class="stat-value" id="galleryViewCount">0</div><div class="stat-label">画廊浏览</div><div class="stat-note">作品浏览量</div></div>
@@ -133,6 +136,10 @@
         <div class="monitor-grid">
           <div class="panel"><h2>热门路径</h2><div id="pathList" class="list"></div></div>
           <div class="panel"><h2>时区分布</h2><div id="timezoneList" class="list"></div></div>
+        </div>
+        <div class="monitor-grid">
+          <div class="panel"><h2>每日作画趋势</h2><div id="generationDailyList" class="list"></div></div>
+          <div class="panel"><h2>每周 / 每月作画</h2><div id="generationPeriodList" class="list"></div></div>
         </div>
         <div class="monitor-grid">
           <div class="panel"><h2>来源 Referer</h2><div id="refererList" class="list"></div></div>
@@ -228,7 +235,13 @@
       $('activeVisitors5m').textContent = fmt(s.activeVisitors5m);
       $('todayPageViews').textContent = `今日页面访问 ${fmt(s.todayPageViews)}｜原始 ${fmt(s.todayRawPageViews)}`;
       $('generationsToday').textContent = fmt(s.generationsToday);
-      $('errorCount').textContent = `错误 ${fmt(s.errorCount)}｜原始 ${fmt(s.rawErrorCount)}`;
+      $('generationsWeek').textContent = fmt(s.generationsWeek);
+      $('generationsWeekRaw').textContent = `原始 ${fmt(s.rawGenerationsWeek)}`;
+      $('generationsMonth').textContent = fmt(s.generationsMonth);
+      $('generationsMonthRaw').textContent = `原始 ${fmt(s.rawGenerationsMonth)}`;
+      $('totalGenerations').textContent = fmt(s.totalGenerations);
+      $('totalGenerationsRaw').textContent = `原始 ${fmt(s.rawTotalGenerations)}`;
+      $('errorCount').textContent = `今日原始 ${fmt(s.rawGenerationsToday)}｜错误 ${fmt(s.errorCount)}｜原始错误 ${fmt(s.rawErrorCount)}`;
       $('galleryItemCount').textContent = fmt(s.galleryItems);
       $('galleryLikeCount').textContent = fmt(s.galleryLikes);
       $('galleryViewCount').textContent = fmt(s.galleryViews);
@@ -241,12 +254,23 @@
       renderList('timezoneList', data.timezones || []);
       renderList('pathList', data.topPaths || [], 'path');
       renderList('refererList', data.referrers || []);
+      renderGenerationStats(data.generationStats || {});
       $('recentRows').innerHTML = (data.recent || []).map(r => {
         const repeat = r.duplicateIpDay
           ? `<span class="repeat-badge">同 IP 当日第 ${fmt(r.visitIndexForIpDay)} 次</span>`
           : '<span class="first-badge">首次计数</span>';
         return `<tr><td>${escapeHtml(fmtTime(r.createdAt))}</td><td>${escapeHtml(r.path)}</td><td>${r.status}</td><td>${escapeHtml(r.device_type)}</td><td>${escapeHtml(r.country || r.timezone || '未知')}</td><td>${escapeHtml(r.ipHash || '')}<br><span style="color:var(--muted)">${escapeHtml(r.visitor)}</span></td><td>${repeat}<br><span style="color:var(--muted)">当日同IP ${fmt(r.sameIpDayTotal)} 次</span></td></tr>`;
       }).join('') || '<tr><td colspan="7">暂无数据</td></tr>';
+    }
+
+
+    function renderGenerationStats(stats) {
+      const daily = stats.daily || [];
+      $('generationDailyList').innerHTML = daily.slice(-14).reverse().map(r => `<div class="row"><div class="name">${escapeHtml(r.day)}</div><div class="num">${fmt(r.count)}</div><div class="sub">原始 ${fmt(r.rawCount)}｜重复 ${fmt(r.repeatCount || 0)}｜IP ${fmt(r.ips || 0)}</div></div>`).join('') || '<div style="color:var(--muted)">暂无真实作画记录</div>';
+      const weekly = (stats.weekly || []).slice(-8).reverse().map(r => ({ label: `周 ${r.week}`, ...r }));
+      const monthly = (stats.monthly || []).slice(-12).reverse().map(r => ({ label: `月 ${r.month}`, ...r }));
+      const rows = [...weekly, ...monthly];
+      $('generationPeriodList').innerHTML = rows.map(r => `<div class="row"><div class="name">${escapeHtml(r.label)}</div><div class="num">${fmt(r.count)}</div><div class="sub">原始 ${fmt(r.rawCount)}｜重复 ${fmt(r.repeatCount || 0)}｜IP ${fmt(r.ips || 0)}</div></div>`).join('') || '<div style="color:var(--muted)">暂无真实作画记录</div>';
     }
 
     function renderChart(id, rows, labelKey, valueKey) {

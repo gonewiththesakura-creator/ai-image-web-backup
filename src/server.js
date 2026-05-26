@@ -232,10 +232,19 @@ app.get('/api/admin/monitor', (req, res) => {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const today = todayStart.getTime();
+  const weekStartDate = new Date(todayStart);
+  const dayOfWeek = weekStartDate.getDay() || 7;
+  weekStartDate.setDate(weekStartDate.getDate() - dayOfWeek + 1);
+  const weekStart = weekStartDate.getTime();
+  const monthStartDate = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+  const monthStart = monthStartDate.getTime();
   const fiveMinutesAgo = now - 5 * 60 * 1000;
   const pagePathWhere = `path NOT LIKE '/api/%' AND path != '/client/pageview'`;
   const ipDayExpr = `ip_hash || '|' || date(created_at / 1000, 'unixepoch', 'localtime')`;
   const uniqueIpDayWhere = `COUNT(DISTINCT ${ipDayExpr})`;
+  const generationWhere = `path = '/api/generate-image' AND status < 400`;
+  const countGenerations = (where, params = []) => db.prepare(`SELECT COUNT(*) AS count FROM access_logs WHERE ${generationWhere} ${where}`).get(...params).count || 0;
+  const countGenerationIpDays = (where, params = []) => db.prepare(`SELECT COUNT(DISTINCT ${ipDayExpr}) AS count FROM access_logs WHERE ${generationWhere} ${where}`).get(...params).count || 0;
 
   const summary = {
     // 访问口径：同一 IP 每天只计 1 次，重复访问不累加进总访问数。
@@ -257,8 +266,14 @@ app.get('/api/admin/monitor', (req, res) => {
     galleryItems: db.prepare('SELECT COUNT(*) AS count FROM gallery_items').get().count || 0,
     galleryLikes: db.prepare('SELECT COALESCE(SUM(likes), 0) AS count FROM gallery_items').get().count || 0,
     galleryViews: db.prepare('SELECT COALESCE(SUM(views), 0) AS count FROM gallery_items').get().count || 0,
-    generationsToday: db.prepare(`SELECT COUNT(DISTINCT ${ipDayExpr}) AS count FROM access_logs WHERE created_at >= ? AND path = '/api/generate-image' AND status < 400`).get(today).count || 0,
-    rawGenerationsToday: db.prepare("SELECT COUNT(*) AS count FROM access_logs WHERE created_at >= ? AND path = '/api/generate-image' AND status < 400").get(today).count || 0
+    generationsToday: countGenerationIpDays('AND created_at >= ?', [today]),
+    rawGenerationsToday: countGenerations('AND created_at >= ?', [today]),
+    generationsWeek: countGenerationIpDays('AND created_at >= ?', [weekStart]),
+    rawGenerationsWeek: countGenerations('AND created_at >= ?', [weekStart]),
+    generationsMonth: countGenerationIpDays('AND created_at >= ?', [monthStart]),
+    rawGenerationsMonth: countGenerations('AND created_at >= ?', [monthStart]),
+    totalGenerations: countGenerationIpDays(''),
+    rawTotalGenerations: countGenerations('')
   };
   summary.todayRepeatRequests = Math.max(0, summary.todayRawRequests - summary.todayRequests);
 
@@ -340,6 +355,49 @@ app.get('/api/admin/monitor', (req, res) => {
     GROUP BY name ORDER BY count DESC, rawCount DESC LIMIT 10
   `).all(since);
 
+  const generationDaily = db.prepare(`
+    SELECT date(created_at / 1000, 'unixepoch', 'localtime') AS day,
+           COUNT(DISTINCT ${ipDayExpr}) AS count,
+           COUNT(*) AS rawCount,
+           MAX(COUNT(*) - COUNT(DISTINCT ${ipDayExpr}), 0) AS repeatCount,
+           COUNT(DISTINCT ip_hash) AS ips
+    FROM access_logs
+    WHERE ${generationWhere} AND created_at >= ?
+    GROUP BY day
+    ORDER BY day ASC
+  `).all(now - 30 * 24 * 60 * 60 * 1000);
+
+  const generationWeekly = db.prepare(`
+    SELECT strftime('%Y-W%W', created_at / 1000, 'unixepoch', 'localtime') AS week,
+           COUNT(DISTINCT ${ipDayExpr}) AS count,
+           COUNT(*) AS rawCount,
+           MAX(COUNT(*) - COUNT(DISTINCT ${ipDayExpr}), 0) AS repeatCount,
+           COUNT(DISTINCT ip_hash) AS ips
+    FROM access_logs
+    WHERE ${generationWhere} AND created_at >= ?
+    GROUP BY week
+    ORDER BY week ASC
+  `).all(now - 12 * 7 * 24 * 60 * 60 * 1000);
+
+  const generationMonthly = db.prepare(`
+    SELECT strftime('%Y-%m', created_at / 1000, 'unixepoch', 'localtime') AS month,
+           COUNT(DISTINCT ${ipDayExpr}) AS count,
+           COUNT(*) AS rawCount,
+           MAX(COUNT(*) - COUNT(DISTINCT ${ipDayExpr}), 0) AS repeatCount,
+           COUNT(DISTINCT ip_hash) AS ips
+    FROM access_logs
+    WHERE ${generationWhere} AND created_at >= ?
+    GROUP BY month
+    ORDER BY month ASC
+  `).all(now - 365 * 24 * 60 * 60 * 1000);
+
+  const generationStats = {
+    policy: '真实成功生图请求统计：来源为 access_logs 中 /api/generate-image 且 status < 400 的记录；主数值按同一 IP 每天只计 1 次，rawCount 为原始成功请求数。',
+    daily: generationDaily,
+    weekly: generationWeekly,
+    monthly: generationMonthly
+  };
+
   const recentRows = db.prepare(`
     SELECT id, created_at, method, path, status, duration_ms, visitor_id, ip_hash, device_type,
            date(created_at / 1000, 'unixepoch', 'localtime') AS access_day,
@@ -390,6 +448,7 @@ app.get('/api/admin/monitor', (req, res) => {
     timezones,
     devices,
     referrers,
+    generationStats,
     recent
   });
 });
