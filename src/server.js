@@ -820,7 +820,7 @@ app.post('/api/generate-image', limiter, async (req, res) => {
     const outputMode = hasReferenceImages ? 'standard' : normalizeOutputMode(req.body?.outputMode);
     const output_format = pickAllowed(req.body?.format, ALLOWED_FORMATS, 'png');
     const n = normalizeCount(req.body?.n);
-    const finalSize = hasReferenceImages && size !== '1024x1024' ? normalizeSize(SIZE_ALIASES[req.body?.size] || '1024x1024') : upscaleDimensions(size, outputMode);
+    const finalSize = hasReferenceImages ? '1024x1024' : upscaleDimensions(size, outputMode);
     const referenceImages = await normalizeReferenceImages(req.body?.referenceImages);
     
     // 如果没有 API Key，检查试用额度。注意：参考图校验必须先完成，避免非法请求消耗试用额度。
