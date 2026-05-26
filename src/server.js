@@ -8,6 +8,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import pg from 'pg';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,6 +27,8 @@ const GALLERY_MAX_IMAGE_WIDTH = Number(process.env.GALLERY_MAX_IMAGE_WIDTH || 12
 const GALLERY_MAX_IMAGE_HEIGHT = Number(process.env.GALLERY_MAX_IMAGE_HEIGHT || 1280);
 const GALLERY_WEBP_QUALITY = Number(process.env.GALLERY_WEBP_QUALITY || 78);
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123456';
+const UMAMI_DATABASE_URL = process.env.UMAMI_DATABASE_URL || '';
+const UMAMI_WEBSITE_ID = process.env.UMAMI_WEBSITE_ID || '595998a1-3596-4065-853e-6952ee26c957';
 const MAX_REFERENCE_IMAGES = 3;
 const MAX_REFERENCE_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -64,6 +67,7 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(PUBLIC_UPLOAD_DIR, { recursive: true });
 
 const db = new Database(DB_PATH);
+const umamiPool = UMAMI_DATABASE_URL ? new pg.Pool({ connectionString: UMAMI_DATABASE_URL, max: 4, idleTimeoutMillis: 30000, connectionTimeoutMillis: 5000 }) : null;
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 db.exec(`
@@ -213,6 +217,176 @@ function requireAdmin(req, res) {
 function countWhere(where, params = []) {
   return db.prepare(`SELECT COUNT(*) AS count FROM access_logs ${where}`).get(...params).count || 0;
 }
+
+function safeNumber(value) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatDateKey(date) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+}
+
+async function queryUmami(sql, params = []) {
+  if (!umamiPool) throw publicError(503, 'Umami 数据库未配置。');
+  const result = await umamiPool.query(sql, params);
+  return result.rows;
+}
+
+app.get('/api/admin/umami-summary', async (req, res, next) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const days = Math.min(Math.max(Number(req.query?.days || 7), 1), 90);
+    const websiteId = UMAMI_WEBSITE_ID;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const [summary] = await queryUmami(`
+      SELECT
+        COUNT(*) FILTER (WHERE event_type = 1) AS pageviews,
+        COUNT(DISTINCT session_id) FILTER (WHERE event_type = 1) AS visitors,
+        COUNT(*) FILTER (WHERE event_type = 2) AS custom_events,
+        COUNT(*) FILTER (WHERE event_type = 2 AND event_name = 'generate_click') AS generate_clicks,
+        COUNT(*) FILTER (WHERE event_type = 2 AND event_name = 'generate_success') AS generate_success,
+        COUNT(*) FILTER (WHERE event_type = 2 AND event_name = 'generate_error') AS generate_errors,
+        COUNT(*) FILTER (WHERE event_type = 2 AND event_name = 'signup_banner_click') AS signup_clicks,
+        COUNT(*) FILTER (WHERE event_type = 2 AND event_name = 'reference_image_used') AS reference_uploads,
+        COUNT(*) FILTER (WHERE event_type = 2 AND event_name = 'gallery_publish_success') AS gallery_publishes
+      FROM website_event
+      WHERE website_id = $1 AND created_at >= $2
+    `, [websiteId, since]);
+
+    const [today] = await queryUmami(`
+      SELECT
+        COUNT(*) FILTER (WHERE event_type = 1) AS pageviews,
+        COUNT(DISTINCT session_id) FILTER (WHERE event_type = 1) AS visitors,
+        COUNT(*) FILTER (WHERE event_type = 2 AND event_name = 'generate_click') AS generate_clicks,
+        COUNT(*) FILTER (WHERE event_type = 2 AND event_name = 'generate_success') AS generate_success,
+        COUNT(*) FILTER (WHERE event_type = 2 AND event_name = 'generate_error') AS generate_errors
+      FROM website_event
+      WHERE website_id = $1 AND created_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai'
+    `, [websiteId]);
+
+    const hourly = await queryUmami(`
+      SELECT to_char(date_trunc('hour', created_at AT TIME ZONE 'Asia/Shanghai'), 'MM-DD HH24:00') AS hour,
+             COUNT(*) FILTER (WHERE event_type = 1) AS pageviews,
+             COUNT(DISTINCT session_id) FILTER (WHERE event_type = 1) AS visitors,
+             COUNT(*) FILTER (WHERE event_type = 2) AS events
+      FROM website_event
+      WHERE website_id = $1 AND created_at >= $2
+      GROUP BY 1
+      ORDER BY 1 ASC
+    `, [websiteId, since24h]);
+
+    const daily = await queryUmami(`
+      SELECT to_char(date_trunc('day', created_at AT TIME ZONE 'Asia/Shanghai'), 'YYYY-MM-DD') AS day,
+             COUNT(*) FILTER (WHERE event_type = 1) AS pageviews,
+             COUNT(DISTINCT session_id) FILTER (WHERE event_type = 1) AS visitors,
+             COUNT(*) FILTER (WHERE event_type = 2 AND event_name = 'generate_click') AS generate_clicks,
+             COUNT(*) FILTER (WHERE event_type = 2 AND event_name = 'generate_success') AS generate_success,
+             COUNT(*) FILTER (WHERE event_type = 2 AND event_name = 'generate_error') AS generate_errors
+      FROM website_event
+      WHERE website_id = $1 AND created_at >= $2
+      GROUP BY 1
+      ORDER BY 1 ASC
+    `, [websiteId, since]);
+
+    const topPaths = await queryUmami(`
+      SELECT COALESCE(NULLIF(url_path, ''), '/') AS path,
+             COUNT(*) AS count,
+             COUNT(DISTINCT session_id) AS visitors
+      FROM website_event
+      WHERE website_id = $1 AND created_at >= $2 AND event_type = 1
+      GROUP BY 1 ORDER BY count DESC LIMIT 12
+    `, [websiteId, since]);
+
+    const referrers = await queryUmami(`
+      SELECT COALESCE(NULLIF(referrer_domain, ''), '直接访问') AS name,
+             COUNT(*) AS count,
+             COUNT(DISTINCT session_id) AS visitors
+      FROM website_event
+      WHERE website_id = $1 AND created_at >= $2 AND event_type = 1
+      GROUP BY 1 ORDER BY count DESC LIMIT 12
+    `, [websiteId, since]);
+
+    const devices = await queryUmami(`
+      SELECT COALESCE(NULLIF(s.device, ''), 'unknown') AS name,
+             COUNT(DISTINCT e.session_id) AS count
+      FROM website_event e JOIN session s ON s.session_id = e.session_id
+      WHERE e.website_id = $1 AND e.created_at >= $2 AND e.event_type = 1
+      GROUP BY 1 ORDER BY count DESC LIMIT 12
+    `, [websiteId, since]);
+
+    const countries = await queryUmami(`
+      SELECT COALESCE(NULLIF(s.country, ''), '未知') AS name,
+             COUNT(DISTINCT e.session_id) AS count
+      FROM website_event e JOIN session s ON s.session_id = e.session_id
+      WHERE e.website_id = $1 AND e.created_at >= $2 AND e.event_type = 1
+      GROUP BY 1 ORDER BY count DESC LIMIT 12
+    `, [websiteId, since]);
+
+    const events = await queryUmami(`
+      SELECT event_name AS name, COUNT(*) AS count
+      FROM website_event
+      WHERE website_id = $1 AND created_at >= $2 AND event_type = 2
+      GROUP BY event_name ORDER BY count DESC LIMIT 20
+    `, [websiteId, since]);
+
+    const recent = await queryUmami(`
+      SELECT e.created_at, e.event_type, e.event_name, e.url_path, e.referrer_domain, e.hostname,
+             s.browser, s.os, s.device, s.country, s.city
+      FROM website_event e LEFT JOIN session s ON s.session_id = e.session_id
+      WHERE e.website_id = $1
+      ORDER BY e.created_at DESC
+      LIMIT 50
+    `, [websiteId]);
+
+    res.json({
+      ok: true,
+      source: 'umami',
+      websiteId,
+      days,
+      metricPolicy: 'Umami 真实采集数据：页面访问来自前台脚本 pageview，自定义事件来自生成、注册、参考图、发布等前端埋点。管理员后台未纳入前台统计。',
+      summary: {
+        pageviews: safeNumber(summary.pageviews),
+        visitors: safeNumber(summary.visitors),
+        customEvents: safeNumber(summary.custom_events),
+        generateClicks: safeNumber(summary.generate_clicks),
+        generateSuccess: safeNumber(summary.generate_success),
+        generateErrors: safeNumber(summary.generate_errors),
+        signupClicks: safeNumber(summary.signup_clicks),
+        referenceUploads: safeNumber(summary.reference_uploads),
+        galleryPublishes: safeNumber(summary.gallery_publishes),
+        todayPageviews: safeNumber(today.pageviews),
+        todayVisitors: safeNumber(today.visitors),
+        todayGenerateClicks: safeNumber(today.generate_clicks),
+        todayGenerateSuccess: safeNumber(today.generate_success),
+        todayGenerateErrors: safeNumber(today.generate_errors)
+      },
+      hourly: hourly.map(r => ({ hour: r.hour, pageviews: safeNumber(r.pageviews), visitors: safeNumber(r.visitors), events: safeNumber(r.events) })),
+      daily: daily.map(r => ({ day: r.day, pageviews: safeNumber(r.pageviews), visitors: safeNumber(r.visitors), generateClicks: safeNumber(r.generate_clicks), generateSuccess: safeNumber(r.generate_success), generateErrors: safeNumber(r.generate_errors) })),
+      topPaths: topPaths.map(r => ({ path: r.path, count: safeNumber(r.count), visitors: safeNumber(r.visitors) })),
+      referrers: referrers.map(r => ({ name: r.name, count: safeNumber(r.count), visitors: safeNumber(r.visitors) })),
+      devices: devices.map(r => ({ name: r.name, count: safeNumber(r.count) })),
+      countries: countries.map(r => ({ name: r.name, count: safeNumber(r.count) })),
+      events: events.map(r => ({ name: r.name || 'pageview', count: safeNumber(r.count) })),
+      recent: recent.map(r => ({
+        createdAt: r.created_at,
+        type: Number(r.event_type) === 2 ? '事件' : '访问',
+        eventName: r.event_name || 'pageview',
+        path: r.url_path || '/',
+        referrer: r.referrer_domain || '直接访问',
+        device: r.device || 'unknown',
+        browser: r.browser || '',
+        os: r.os || '',
+        country: r.country || '未知',
+        city: r.city || ''
+      }))
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 app.post('/api/analytics/beacon', (req, res) => {
   const startedAt = Date.now();

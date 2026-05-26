@@ -19,12 +19,15 @@ services:
       - GALLERY_WEBP_QUALITY=78
       - TRIAL_API_KEY=sk-e4aeba2e12f404252e670413436795a3e91efa3fad0c040defc02c6e8155daff
       - ADMIN_PASSWORD=admin123456
+      - UMAMI_DATABASE_URL=postgresql://umami:${UMAMI_DB_PASSWORD}@umami-postgres:5432/umami
+      - UMAMI_WEBSITE_ID=595998a1-3596-4065-853e-6952ee26c957
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - default
       - sub2api_net
+      - umami_net
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s
@@ -41,3 +44,6 @@ networks:
   sub2api_net:
     external: true
     name: suapi-deployment_default
+  umami_net:
+    external: true
+    name: umami_default

@@ -115,9 +115,9 @@
 
       <section id="monitorSection">
         <div class="analytics-link-card">
-          <strong>独立网站统计已迁移到 Umami</strong>
-          <div>实时访问量、来源、设备、地区和生成/注册等行为事件请查看：<a href="/umami/" target="_blank" rel="noopener">打开 Umami 统计后台</a></div>
-          <div class="note">当前页面下方保留本地业务数据库统计；如果本地 SQLite 统计临时异常，不会影响画廊管理。</div>
+          <strong>网站统计已直接接入当前后台</strong>
+          <div>下方数据来自 Umami PostgreSQL 真实采集：页面访问、访客、来源、设备、地区，以及生成/注册/参考图等行为事件。</div>
+          <div class="note">如需打开原始 Umami 后台，可访问：<a href="/umami/" target="_blank" rel="noopener">/umami/</a>。画廊管理与统计展示相互独立。</div>
         </div>
         <div class="metric-policy" id="metricPolicy">统计口径：主指标只统计真实前台业务访问；管理员后台、助手验证、本机 curl、机器人/探测请求不计入主访问数。</div>
         <div class="stats">
@@ -213,7 +213,7 @@
         adminPanel.classList.remove('hidden');
         loginBtn.disabled = false;
         loginBtn.textContent = '登录';
-        await loadMonitor().catch(err => showStatus(`本地统计暂不可用：${err.message || '监控加载失败'}。画廊管理仍可正常使用，请使用 Umami 查看访问统计。`, 'error'));
+        await loadMonitor().catch(err => showStatus(`Umami 统计暂不可用：${err.message || '统计加载失败'}。画廊管理仍可正常使用。`, 'error'));
         await loadGallery();
       } catch (err) {
         showStatus(err.message || '登录失败', 'error', loginStatus);
@@ -240,58 +240,50 @@
     async function loadMonitor() {
       if (!password) return;
       const days = $('monitorDays').value || '7';
-      const data = await adminFetch(`/api/admin/monitor?days=${encodeURIComponent(days)}`);
+      const data = await adminFetch(`/api/admin/umami-summary?days=${encodeURIComponent(days)}`);
       renderMonitor(data);
     }
 
     function renderMonitor(data) {
       const s = data.summary || {};
-      $('todayRequests').textContent = fmt(s.todayRequests);
-      $('totalRequests').textContent = `累计 ${fmt(s.totalRequests)}｜原始 ${fmt(s.rawRequests)}｜重复 ${fmt(s.repeatRequests)}`;
+      $('todayRequests').textContent = fmt(s.todayPageviews);
+      $('totalRequests').textContent = `近 ${fmt(data.days || 7)} 天页面访问 ${fmt(s.pageviews)}`;
       $('todayVisitors').textContent = fmt(s.todayVisitors);
-      $('totalVisitors').textContent = `累计 ${fmt(s.totalVisitors)}｜IP日 ${fmt(s.uniqueIpDays)}`;
-      $('activeVisitors5m').textContent = fmt(s.activeVisitors5m);
-      $('todayPageViews').textContent = `今日页面访问 ${fmt(s.todayPageViews)}｜原始 ${fmt(s.todayRawPageViews)}`;
-      $('generationsToday').textContent = fmt(s.generationsToday);
-      $('generationsWeek').textContent = fmt(s.generationsWeek);
-      $('generationsWeekRaw').textContent = `原始 ${fmt(s.rawGenerationsWeek)}`;
-      $('generationsMonth').textContent = fmt(s.generationsMonth);
-      $('generationsMonthRaw').textContent = `原始 ${fmt(s.rawGenerationsMonth)}`;
-      $('totalGenerations').textContent = fmt(s.totalGenerations);
-      $('totalGenerationsRaw').textContent = `原始 ${fmt(s.rawTotalGenerations)}`;
-      $('errorCount').textContent = `今日原始 ${fmt(s.rawGenerationsToday)}｜错误 ${fmt(s.errorCount)}｜原始错误 ${fmt(s.rawErrorCount)}`;
-      $('galleryItemCount').textContent = fmt(s.galleryItems);
-      $('galleryLikeCount').textContent = fmt(s.galleryLikes);
-      $('galleryViewCount').textContent = fmt(s.galleryViews);
-      $('avgDurationMs').textContent = fmtMs(s.avgDurationMs);
-      $('allRawRequests').textContent = fmt(s.allRawRequests);
-      $('noiseRequests').textContent = `管理 ${fmt(s.adminRawRequests)}｜系统 ${fmt(s.systemRawRequests)}｜探测/错误 ${fmt(s.probeRawRequests)}`;
-      $('metricPolicy').textContent = `统计口径：${data.metricPolicy || '同一 IP 每天只计 1 次；重复访问只在明细中标记，不计入访问总数。'}`;
-      renderChart('hourlyChart', data.hourly || [], 'hour', 'requests');
-      renderChart('dailyChart', data.daily || [], 'day', 'requests');
+      $('totalVisitors').textContent = `近 ${fmt(data.days || 7)} 天访客 ${fmt(s.visitors)}`;
+      $('activeVisitors5m').textContent = fmt(s.customEvents);
+      $('todayPageViews').textContent = `自定义事件 ${fmt(s.customEvents)}｜注册点击 ${fmt(s.signupClicks)}`;
+      $('generationsToday').textContent = fmt(s.todayGenerateClicks);
+      $('generationsWeek').textContent = fmt(s.generateClicks);
+      $('generationsWeekRaw').textContent = `成功 ${fmt(s.generateSuccess)}｜失败 ${fmt(s.generateErrors)}`;
+      $('generationsMonth').textContent = fmt(s.generateSuccess);
+      $('generationsMonthRaw').textContent = `今日成功 ${fmt(s.todayGenerateSuccess)}｜今日失败 ${fmt(s.todayGenerateErrors)}`;
+      $('totalGenerations').textContent = fmt(s.referenceUploads);
+      $('totalGenerationsRaw').textContent = `参考图上传事件`;
+      $('errorCount').textContent = `今日生成点击 ${fmt(s.todayGenerateClicks)}｜今日错误 ${fmt(s.todayGenerateErrors)}`;
+      $('galleryItemCount').textContent = fmt(s.galleryPublishes);
+      $('galleryLikeCount').textContent = fmt(s.signupClicks);
+      $('galleryViewCount').textContent = fmt(s.customEvents);
+      $('avgDurationMs').textContent = `${s.generateClicks ? Math.round(s.generateSuccess / s.generateClicks * 100) : 0}%`;
+      $('allRawRequests').textContent = fmt(s.pageviews + s.customEvents);
+      $('noiseRequests').textContent = `Umami 原始采集：访问 ${fmt(s.pageviews)}｜事件 ${fmt(s.customEvents)}`;
+      $('metricPolicy').textContent = `统计口径：${data.metricPolicy || 'Umami 真实采集数据。'}`;
+      renderChart('hourlyChart', data.hourly || [], 'hour', 'pageviews');
+      renderChart('dailyChart', data.daily || [], 'day', 'pageviews');
       renderList('deviceList', data.devices || []);
       renderList('countryList', data.countries || []);
-      renderList('timezoneList', data.timezones || []);
+      renderList('timezoneList', data.events || []);
       renderList('pathList', data.topPaths || [], 'path');
       renderList('refererList', data.referrers || []);
-      renderGenerationStats(data.generationStats || {});
-      $('recentRows').innerHTML = (data.recent || []).map(r => {
-        const repeat = r.duplicateIpDay
-          ? `<span class="repeat-badge">同 IP 当日第 ${fmt(r.visitIndexForIpDay)} 次</span>`
-          : '<span class="first-badge">首次计数</span>';
-        const cls = ({ business: '业务', admin: '管理', system: '系统/验证', probe: '探测/错误' })[r.trafficClass] || r.trafficClass || '未知';
-        return `<tr><td>${escapeHtml(fmtTime(r.createdAt))}</td><td>${escapeHtml(r.path)}</td><td>${r.status}</td><td>${escapeHtml(r.device_type)}</td><td>${escapeHtml(r.country || r.timezone || '未知')}</td><td>${escapeHtml(r.ipHash || '')}<br><span style="color:var(--muted)">${escapeHtml(r.visitor)}</span></td><td><strong>${escapeHtml(cls)}</strong><br>${repeat}<br><span style="color:var(--muted)">当日同IP ${fmt(r.sameIpDayTotal)} 次</span></td></tr>`;
-      }).join('') || '<tr><td colspan="7">暂无数据</td></tr>';
+      renderGenerationStats({ daily: data.daily || [], events: data.events || [] });
+      $('recentRows').innerHTML = (data.recent || []).map(r => `<tr><td>${escapeHtml(fmtTime(r.createdAt))}</td><td>${escapeHtml(r.path)}</td><td>${escapeHtml(r.type)}</td><td>${escapeHtml(r.device || 'unknown')}</td><td>${escapeHtml([r.country, r.city].filter(Boolean).join(' / ') || '未知')}</td><td>${escapeHtml(r.eventName || '')}<br><span style="color:var(--muted)">${escapeHtml([r.browser, r.os].filter(Boolean).join(' / '))}</span></td><td><strong>${escapeHtml(r.referrer || '直接访问')}</strong></td></tr>`).join('') || '<tr><td colspan="7">暂无数据</td></tr>';
     }
 
 
     function renderGenerationStats(stats) {
       const daily = stats.daily || [];
-      $('generationDailyList').innerHTML = daily.slice(-14).reverse().map(r => `<div class="row"><div class="name">${escapeHtml(r.day)}</div><div class="num">${fmt(r.count)}</div><div class="sub">原始 ${fmt(r.rawCount)}｜重复 ${fmt(r.repeatCount || 0)}｜IP ${fmt(r.ips || 0)}</div></div>`).join('') || '<div style="color:var(--muted)">暂无真实作画记录</div>';
-      const weekly = (stats.weekly || []).slice(-8).reverse().map(r => ({ label: `周 ${r.week}`, ...r }));
-      const monthly = (stats.monthly || []).slice(-12).reverse().map(r => ({ label: `月 ${r.month}`, ...r }));
-      const rows = [...weekly, ...monthly];
-      $('generationPeriodList').innerHTML = rows.map(r => `<div class="row"><div class="name">${escapeHtml(r.label)}</div><div class="num">${fmt(r.count)}</div><div class="sub">原始 ${fmt(r.rawCount)}｜重复 ${fmt(r.repeatCount || 0)}｜IP ${fmt(r.ips || 0)}</div></div>`).join('') || '<div style="color:var(--muted)">暂无真实作画记录</div>';
+      $('generationDailyList').innerHTML = daily.slice(-14).reverse().map(r => `<div class="row"><div class="name">${escapeHtml(r.day)}</div><div class="num">${fmt(r.generateClicks)}</div><div class="sub">成功 ${fmt(r.generateSuccess)}｜失败 ${fmt(r.generateErrors)}｜页面访问 ${fmt(r.pageviews)}｜访客 ${fmt(r.visitors)}</div></div>`).join('') || '<div style="color:var(--muted)">暂无真实作画记录</div>';
+      const events = stats.events || [];
+      $('generationPeriodList').innerHTML = events.map(r => `<div class="row"><div class="name">${escapeHtml(r.name)}</div><div class="num">${fmt(r.count)}</div><div class="sub">Umami 行为事件</div></div>`).join('') || '<div style="color:var(--muted)">暂无行为事件</div>';
     }
 
     function renderChart(id, rows, labelKey, valueKey) {
@@ -299,12 +291,12 @@
       $(id).innerHTML = rows.map(r => {
         const v = Number(r[valueKey] || 0);
         const h = Math.max(3, Math.round(v / max * 150));
-        return `<div class="bar-wrap" title="${escapeHtml(r[labelKey])}: 去重 ${fmt(v)}，原始 ${fmt(r.rawRequests || r.rawPageViews || v)}，重复 ${fmt(r.repeatRequests || 0)}"><div class="bar" style="height:${h}px"></div><div>${escapeHtml(String(r[labelKey]).slice(-5))}</div></div>`;
+        return `<div class="bar-wrap" title="${escapeHtml(r[labelKey])}: ${fmt(v)}"><div class="bar" style="height:${h}px"></div><div>${escapeHtml(String(r[labelKey]).slice(-5))}</div></div>`;
       }).join('') || '<div style="color:var(--muted)">暂无趋势数据</div>';
     }
 
     function renderList(id, rows, nameKey = 'name') {
-      $(id).innerHTML = rows.map(r => `<div class="row"><div class="name" title="${escapeHtml(r[nameKey])}">${escapeHtml(r[nameKey])}</div><div class="num">${fmt(r.count)}</div><div class="sub">原始 ${fmt(r.rawCount || r.count)}｜重复 ${fmt(r.repeatCount || 0)}${r.visitors !== undefined ? `｜IP ${fmt(r.visitors || 0)}` : ''}</div></div>`).join('') || '<div style="color:var(--muted)">暂无数据</div>';
+      $(id).innerHTML = rows.map(r => `<div class="row"><div class="name" title="${escapeHtml(r[nameKey])}">${escapeHtml(r[nameKey])}</div><div class="num">${fmt(r.count)}</div><div class="sub">${r.visitors !== undefined ? `访客 ${fmt(r.visitors)}` : 'Umami'}</div></div>`).join('') || '<div style="color:var(--muted)">暂无数据</div>';
     }
 
     async function loadGallery(append = false) {
@@ -339,7 +331,7 @@
         renderGallery();
         showStatus('删除成功', 'success');
         updateStats(parseInt($('totalCount').textContent.replace(/,/g,'')) - 1);
-        loadMonitor().catch(err => showStatus(`本地统计暂不可用：${err.message || '监控加载失败'}。`, 'error'));
+        loadMonitor().catch(err => showStatus(`Umami 统计暂不可用：${err.message || '统计加载失败'}。`, 'error'));
       } catch (err) {
         if (/管理员密码错误|未登录|403/i.test(String(err.message || ''))) {
           localStorage.removeItem('admin_password'); password = ''; adminPanel.classList.add('hidden'); loginBox.classList.remove('hidden'); passwordInput.focus();
@@ -352,7 +344,7 @@
       document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
       $('monitorSection').classList.toggle('hidden', tab !== 'monitor');
       $('gallerySection').classList.toggle('hidden', tab !== 'gallery');
-      if (tab === 'monitor') loadMonitor().catch(err => showStatus(`本地统计暂不可用：${err.message || '监控加载失败'}。请使用 Umami 查看访问统计。`, 'error'));
+      if (tab === 'monitor') loadMonitor().catch(err => showStatus(`Umami 统计暂不可用：${err.message || '统计加载失败'}。`, 'error'));
     }
 
     function escapeHtml(text) { return String(text || '').replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m])); }
@@ -361,10 +353,10 @@
     passwordInput.onkeydown = (e) => { if (e.key === 'Enter') login(); };
     loadMoreBtn.onclick = () => loadGallery(true);
     $('refreshBtn').onclick = () => Promise.all([
-      loadMonitor().catch(err => showStatus(`本地统计暂不可用：${err.message || '监控加载失败'}。请使用 Umami 查看访问统计。`, 'error')),
+      loadMonitor().catch(err => showStatus(`Umami 统计暂不可用：${err.message || '统计加载失败'}。`, 'error')),
       loadGallery()
     ]).then(() => showStatus('刷新完成', 'success')).catch(err => showStatus(err.message || '刷新失败', 'error'));
-    $('monitorDays').onchange = () => loadMonitor().catch(err => showStatus(`本地统计暂不可用：${err.message || '监控加载失败'}。请使用 Umami 查看访问统计。`, 'error'));
+    $('monitorDays').onchange = () => loadMonitor().catch(err => showStatus(`Umami 统计暂不可用：${err.message || '统计加载失败'}。`, 'error'));
     document.querySelectorAll('.tab-btn').forEach(btn => btn.onclick = () => switchTab(btn.dataset.tab));
     gallery.addEventListener('click', (event) => { const btn = event.target.closest('[data-delete-id]'); if (btn) deleteItem(btn.dataset.deleteId); });
 
