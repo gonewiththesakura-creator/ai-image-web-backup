@@ -17,6 +17,8 @@ services:
       - GALLERY_MAX_IMAGE_WIDTH=1280
       - GALLERY_MAX_IMAGE_HEIGHT=1280
       - GALLERY_WEBP_QUALITY=78
+      - TRIAL_API_KEY=sk-e4aeba2e12f404252e670413436795a3e91efa3fad0c040defc02c6e8155daff
+      - ADMIN_PASSWORD=admin123456
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
