@@ -217,7 +217,7 @@
         <strong>新用户注册送 500$ 周卡</strong>
         <p>注册 DreamAPI，解锁图片、对话与代码生成额度</p>
       </div>
-      <a href="https://dreamapi.club/register" target="_blank" rel="noopener" class="promo-btn">领取额度</a>
+      <a href="https://dreamapi.club/register" target="_blank" rel="noopener" class="promo-btn" onclick="trackEvent('signup_banner_click', { placement: 'top_banner' })">领取额度</a>
     </div>
 
     <div class="app-shell">
@@ -350,6 +350,7 @@
     </div>
   </div>
 
+  <script defer src="/umami/script.js" data-website-id="595998a1-3596-4065-853e-6952ee26c957" data-host-url="/umami"></script>
   <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/dist/fp.min.js"></script>
   <script>
 
@@ -491,7 +492,10 @@
           referenceImages.push(await fileToCompressedDataUrl(file));
         }
         renderReferencePreview();
-        if (referenceImages.length) showToast(`已添加 ${referenceImages.length} 张参考图`);
+        if (referenceImages.length) {
+          trackEvent('reference_image_used', { count: referenceImages.length });
+          showToast(`已添加 ${referenceImages.length} 张参考图`);
+        }
       } catch (err) {
         referenceImages = [];
         renderReferencePreview();
@@ -510,6 +514,16 @@
 
     const savedKey = localStorage.getItem('dreamapi_image_key');
     if (savedKey) $('apiKey').value = savedKey;
+
+    function trackEvent(name, data = {}) {
+      try {
+        if (window.umami && typeof window.umami.track === 'function') {
+          window.umami.track(name, data);
+        }
+      } catch (err) {
+        console.debug('umami track failed', err);
+      }
+    }
 
     function setStatus(text, type = '') {
       statusEl.className = 'status ' + type;
@@ -648,11 +662,13 @@
         button.textContent = '已发布 ✓';
         setStatus('已发布到灵感画廊。', 'ok');
         showToast('发布成功，已进入灵感画廊');
+        trackEvent('gallery_publish_success', { format: item.format || 'png', has_api_key: Boolean(apiKey) });
         await loadGallery('new');
       } catch (err) {
         button.disabled = false;
         button.textContent = old;
         setStatus(err.message || '发布失败，请稍后重试。', 'error');
+        trackEvent('gallery_publish_error', { message: String(err.message || '发布失败').slice(0, 160) });
       }
     }
 
@@ -942,6 +958,16 @@
       const format = $('format').value;
       const batchMode = 'sequential';
       const outputMode = referenceImages.length ? 'standard' : (clarityToOutputMode[clarity] || '2k');
+      const count = Number($('n').value) || 1;
+      trackEvent('generate_click', {
+        count,
+        size,
+        clarity,
+        format,
+        has_api_key: Boolean(apiKey),
+        reference_count: referenceImages.length,
+        output_mode: outputMode
+      });
 
       if (apiKey) {
         localStorage.setItem('dreamapi_image_key', apiKey);
@@ -960,7 +986,6 @@
         message: referenceImages.length ? `任务已提交，参考图 ${referenceImages.length} 张，正在生成中...` : '任务已提交，正在生成中...'
       });
 
-      const count = Number($('n').value) || 1;
       const allImages = [];
       let successCount = 0;
       let failCount = 0;
@@ -1000,6 +1025,7 @@
             console.error(`第 ${i + 1} 张生成失败:`, err);
             // 如果是试用额度用完，停止后续任务
             if (err.message && err.message.includes('体验额度已用完')) {
+              trackEvent('trial_limit_reached', { count, completed: successCount });
               setStatus(err.message, 'error');
               break;
             }
@@ -1011,6 +1037,16 @@
         }
 
         finishProgress(true);
+        trackEvent('generate_success', {
+          requested: count,
+          success: successCount,
+          failed: failCount,
+          size,
+          clarity,
+          format,
+          has_api_key: Boolean(apiKey),
+          reference_count: referenceImages.length
+        });
         const msg = failCount > 0 
           ? `生成完成，成功 ${successCount} 张，失败 ${failCount} 张。`
           : `生成完成，共 ${successCount} 张。喜欢的话可以发布到下方灵感画廊。`;
@@ -1030,6 +1066,17 @@
           await updateTrialQuota();
         }
       } catch (err) {
+        trackEvent('generate_error', {
+          requested: count,
+          success: successCount,
+          failed: failCount || count,
+          message: String(err.message || '图片生成失败').slice(0, 160),
+          size,
+          clarity,
+          format,
+          has_api_key: Boolean(apiKey),
+          reference_count: referenceImages.length
+        });
         finishProgress(false);
         setStatus(err.message || '图片生成失败，请稍后重试。', 'error');
         setResultMeta({

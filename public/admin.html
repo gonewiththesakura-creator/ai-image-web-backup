@@ -57,6 +57,10 @@
     .row .num { color:var(--blue); font-weight:700; }
     .row .sub { color:var(--muted); }
     .metric-policy { margin:-8px 0 18px; color:var(--amber); font-size:13px; line-height:1.6; }
+    .analytics-link-card { margin-bottom:18px; background:rgba(79,140,255,.10); border:1px solid rgba(79,140,255,.28); border-radius:16px; padding:18px; color:var(--text); line-height:1.7; }
+    .analytics-link-card a { color:#93c5fd; font-weight:700; text-decoration:none; }
+    .analytics-link-card a:hover { text-decoration:underline; }
+    .analytics-link-card .note { color:var(--muted); font-size:13px; margin-top:6px; }
     .repeat-badge { display:inline-block; margin-left:6px; padding:2px 7px; border-radius:999px; background:rgba(251,191,36,.16); color:var(--amber); font-size:11px; border:1px solid rgba(251,191,36,.28); }
     .first-badge { display:inline-block; margin-left:6px; padding:2px 7px; border-radius:999px; background:rgba(52,211,153,.14); color:var(--green); font-size:11px; border:1px solid rgba(52,211,153,.25); }
     table { width:100%; border-collapse: collapse; font-size:12px; }
@@ -110,6 +114,11 @@
       <div id="status" class="status hidden"></div>
 
       <section id="monitorSection">
+        <div class="analytics-link-card">
+          <strong>独立网站统计已迁移到 Umami</strong>
+          <div>实时访问量、来源、设备、地区和生成/注册等行为事件请查看：<a href="/umami/" target="_blank" rel="noopener">打开 Umami 统计后台</a></div>
+          <div class="note">当前页面下方保留本地业务数据库统计；如果本地 SQLite 统计临时异常，不会影响画廊管理。</div>
+        </div>
         <div class="metric-policy" id="metricPolicy">统计口径：主指标只统计真实前台业务访问；管理员后台、助手验证、本机 curl、机器人/探测请求不计入主访问数。</div>
         <div class="stats">
           <div class="stat-card"><div class="stat-value" id="todayRequests">0</div><div class="stat-label">今日访问 IP（日去重）</div><div class="stat-note" id="totalRequests">累计 0</div></div>
@@ -204,7 +213,8 @@
         adminPanel.classList.remove('hidden');
         loginBtn.disabled = false;
         loginBtn.textContent = '登录';
-        await Promise.all([loadMonitor(), loadGallery()]);
+        await loadMonitor().catch(err => showStatus(`本地统计暂不可用：${err.message || '监控加载失败'}。画廊管理仍可正常使用，请使用 Umami 查看访问统计。`, 'error'));
+        await loadGallery();
       } catch (err) {
         showStatus(err.message || '登录失败', 'error', loginStatus);
         loginBtn.disabled = false;
@@ -215,7 +225,14 @@
     async function adminFetch(url, options = {}) {
       const resp = await fetch(url, { ...options, headers: { ...(options.headers || {}), 'X-Admin-Password': password } });
       const text = await resp.text();
-      const data = text ? JSON.parse(text) : {};
+      let data = {};
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { error: text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() };
+        }
+      }
       if (!resp.ok) throw new Error(data.error || '请求失败');
       return data;
     }
@@ -322,7 +339,7 @@
         renderGallery();
         showStatus('删除成功', 'success');
         updateStats(parseInt($('totalCount').textContent.replace(/,/g,'')) - 1);
-        loadMonitor().catch(() => {});
+        loadMonitor().catch(err => showStatus(`本地统计暂不可用：${err.message || '监控加载失败'}。`, 'error'));
       } catch (err) {
         if (/管理员密码错误|未登录|403/i.test(String(err.message || ''))) {
           localStorage.removeItem('admin_password'); password = ''; adminPanel.classList.add('hidden'); loginBox.classList.remove('hidden'); passwordInput.focus();
@@ -335,7 +352,7 @@
       document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
       $('monitorSection').classList.toggle('hidden', tab !== 'monitor');
       $('gallerySection').classList.toggle('hidden', tab !== 'gallery');
-      if (tab === 'monitor') loadMonitor().catch(err => showStatus(err.message || '监控加载失败', 'error'));
+      if (tab === 'monitor') loadMonitor().catch(err => showStatus(`本地统计暂不可用：${err.message || '监控加载失败'}。请使用 Umami 查看访问统计。`, 'error'));
     }
 
     function escapeHtml(text) { return String(text || '').replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m])); }
@@ -343,8 +360,11 @@
     loginBtn.onclick = login;
     passwordInput.onkeydown = (e) => { if (e.key === 'Enter') login(); };
     loadMoreBtn.onclick = () => loadGallery(true);
-    $('refreshBtn').onclick = () => Promise.all([loadMonitor(), loadGallery()]).then(() => showStatus('刷新成功', 'success')).catch(err => showStatus(err.message || '刷新失败', 'error'));
-    $('monitorDays').onchange = () => loadMonitor().catch(err => showStatus(err.message || '监控加载失败', 'error'));
+    $('refreshBtn').onclick = () => Promise.all([
+      loadMonitor().catch(err => showStatus(`本地统计暂不可用：${err.message || '监控加载失败'}。请使用 Umami 查看访问统计。`, 'error')),
+      loadGallery()
+    ]).then(() => showStatus('刷新完成', 'success')).catch(err => showStatus(err.message || '刷新失败', 'error'));
+    $('monitorDays').onchange = () => loadMonitor().catch(err => showStatus(`本地统计暂不可用：${err.message || '监控加载失败'}。请使用 Umami 查看访问统计。`, 'error'));
     document.querySelectorAll('.tab-btn').forEach(btn => btn.onclick = () => switchTab(btn.dataset.tab));
     gallery.addEventListener('click', (event) => { const btn = event.target.closest('[data-delete-id]'); if (btn) deleteItem(btn.dataset.deleteId); });
 
