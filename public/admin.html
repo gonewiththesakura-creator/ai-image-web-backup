@@ -110,7 +110,7 @@
       <div id="status" class="status hidden"></div>
 
       <section id="monitorSection">
-        <div class="metric-policy" id="metricPolicy">统计口径：同一 IP 每天只计 1 次；重复访问只在明细中标记，不计入访问总数。</div>
+        <div class="metric-policy" id="metricPolicy">统计口径：主指标只统计真实前台业务访问；管理员后台、助手验证、本机 curl、机器人/探测请求不计入主访问数。</div>
         <div class="stats">
           <div class="stat-card"><div class="stat-value" id="todayRequests">0</div><div class="stat-label">今日访问 IP（日去重）</div><div class="stat-note" id="totalRequests">累计 0</div></div>
           <div class="stat-card"><div class="stat-value" id="todayVisitors">0</div><div class="stat-label">今日匿名访客</div><div class="stat-note" id="totalVisitors">累计 0</div></div>
@@ -122,7 +122,8 @@
           <div class="stat-card"><div class="stat-value" id="galleryItemCount">0</div><div class="stat-label">画廊作品</div><div class="stat-note">公开画廊总量</div></div>
           <div class="stat-card"><div class="stat-value" id="galleryLikeCount">0</div><div class="stat-label">画廊点赞</div><div class="stat-note">累计互动</div></div>
           <div class="stat-card"><div class="stat-value" id="galleryViewCount">0</div><div class="stat-label">画廊浏览</div><div class="stat-note">作品浏览量</div></div>
-          <div class="stat-card"><div class="stat-value" id="avgDurationMs">0ms</div><div class="stat-label">平均响应</div><div class="stat-note">最近窗口</div></div>
+          <div class="stat-card"><div class="stat-value" id="avgDurationMs">0ms</div><div class="stat-label">平均响应</div><div class="stat-note">业务访问窗口</div></div>
+          <div class="stat-card"><div class="stat-value" id="allRawRequests">0</div><div class="stat-label">全部原始日志</div><div class="stat-note" id="noiseRequests">管理/系统/探测 0</div></div>
         </div>
 
         <div class="monitor-grid">
@@ -143,7 +144,7 @@
         </div>
         <div class="monitor-grid">
           <div class="panel"><h2>来源 Referer</h2><div id="refererList" class="list"></div></div>
-          <div class="panel"><h2>最近访问</h2><div style="overflow:auto;max-height:420px"><table><thead><tr><th>时间</th><th>路径</th><th>状态</th><th>设备</th><th>地区</th><th>IP/访客</th><th>重复</th></tr></thead><tbody id="recentRows"></tbody></table></div></div>
+          <div class="panel"><h2>最近访问</h2><div style="overflow:auto;max-height:420px"><table><thead><tr><th>时间</th><th>路径</th><th>状态</th><th>设备</th><th>地区</th><th>IP/访客</th><th>类别/重复</th></tr></thead><tbody id="recentRows"></tbody></table></div></div>
         </div>
       </section>
 
@@ -246,6 +247,8 @@
       $('galleryLikeCount').textContent = fmt(s.galleryLikes);
       $('galleryViewCount').textContent = fmt(s.galleryViews);
       $('avgDurationMs').textContent = fmtMs(s.avgDurationMs);
+      $('allRawRequests').textContent = fmt(s.allRawRequests);
+      $('noiseRequests').textContent = `管理 ${fmt(s.adminRawRequests)}｜系统 ${fmt(s.systemRawRequests)}｜探测/错误 ${fmt(s.probeRawRequests)}`;
       $('metricPolicy').textContent = `统计口径：${data.metricPolicy || '同一 IP 每天只计 1 次；重复访问只在明细中标记，不计入访问总数。'}`;
       renderChart('hourlyChart', data.hourly || [], 'hour', 'requests');
       renderChart('dailyChart', data.daily || [], 'day', 'requests');
@@ -259,7 +262,8 @@
         const repeat = r.duplicateIpDay
           ? `<span class="repeat-badge">同 IP 当日第 ${fmt(r.visitIndexForIpDay)} 次</span>`
           : '<span class="first-badge">首次计数</span>';
-        return `<tr><td>${escapeHtml(fmtTime(r.createdAt))}</td><td>${escapeHtml(r.path)}</td><td>${r.status}</td><td>${escapeHtml(r.device_type)}</td><td>${escapeHtml(r.country || r.timezone || '未知')}</td><td>${escapeHtml(r.ipHash || '')}<br><span style="color:var(--muted)">${escapeHtml(r.visitor)}</span></td><td>${repeat}<br><span style="color:var(--muted)">当日同IP ${fmt(r.sameIpDayTotal)} 次</span></td></tr>`;
+        const cls = ({ business: '业务', admin: '管理', system: '系统/验证', probe: '探测/错误' })[r.trafficClass] || r.trafficClass || '未知';
+        return `<tr><td>${escapeHtml(fmtTime(r.createdAt))}</td><td>${escapeHtml(r.path)}</td><td>${r.status}</td><td>${escapeHtml(r.device_type)}</td><td>${escapeHtml(r.country || r.timezone || '未知')}</td><td>${escapeHtml(r.ipHash || '')}<br><span style="color:var(--muted)">${escapeHtml(r.visitor)}</span></td><td><strong>${escapeHtml(cls)}</strong><br>${repeat}<br><span style="color:var(--muted)">当日同IP ${fmt(r.sameIpDayTotal)} 次</span></td></tr>`;
       }).join('') || '<tr><td colspan="7">暂无数据</td></tr>';
     }
 

@@ -242,26 +242,36 @@ app.get('/api/admin/monitor', (req, res) => {
   const pagePathWhere = `path NOT LIKE '/api/%' AND path != '/client/pageview'`;
   const ipDayExpr = `ip_hash || '|' || date(created_at / 1000, 'unixepoch', 'localtime')`;
   const uniqueIpDayWhere = `COUNT(DISTINCT ${ipDayExpr})`;
-  const generationWhere = `path = '/api/generate-image' AND status < 400`;
+  const adminTrafficWhere = `(path = '/admin.html' OR path LIKE '/api/admin/%')`;
+  const probeTrafficWhere = `(status >= 400 OR path IN ('/.env', '/favicon.ico') OR method NOT IN ('GET', 'POST'))`;
+  const systemTrafficWhere = `(device_type = 'bot' OR lower(user_agent) LIKE '%curl/%' OR lower(user_agent) LIKE '%python-urllib%' OR lower(user_agent) LIKE '%python-requests%' OR lower(user_agent) LIKE '%headlesschrome%')`;
+  const businessTrafficWhere = `NOT ${adminTrafficWhere} AND NOT ${probeTrafficWhere} AND NOT ${systemTrafficWhere}`;
+  const generationWhere = `path = '/api/generate-image' AND status < 400 AND ${businessTrafficWhere}`;
+  const countBusiness = (where = '', params = []) => db.prepare(`SELECT COUNT(*) AS count FROM access_logs WHERE ${businessTrafficWhere} ${where}`).get(...params).count || 0;
+  const countBusinessIpDays = (where = '', params = []) => db.prepare(`SELECT COUNT(DISTINCT ${ipDayExpr}) AS count FROM access_logs WHERE ${businessTrafficWhere} ${where}`).get(...params).count || 0;
   const countGenerations = (where, params = []) => db.prepare(`SELECT COUNT(*) AS count FROM access_logs WHERE ${generationWhere} ${where}`).get(...params).count || 0;
   const countGenerationIpDays = (where, params = []) => db.prepare(`SELECT COUNT(DISTINCT ${ipDayExpr}) AS count FROM access_logs WHERE ${generationWhere} ${where}`).get(...params).count || 0;
 
   const summary = {
-    // 访问口径：同一 IP 每天只计 1 次，重复访问不累加进总访问数。
-    totalRequests: db.prepare(`SELECT ${uniqueIpDayWhere} AS count FROM access_logs`).get().count || 0,
-    rawRequests: countWhere(''),
-    repeatRequests: Math.max(0, countWhere('') - (db.prepare(`SELECT ${uniqueIpDayWhere} AS count FROM access_logs`).get().count || 0)),
-    totalVisitors: db.prepare('SELECT COUNT(DISTINCT visitor_id) AS count FROM access_logs').get().count || 0,
-    uniqueIpDays: db.prepare(`SELECT ${uniqueIpDayWhere} AS count FROM access_logs`).get().count || 0,
-    todayRequests: db.prepare(`SELECT ${uniqueIpDayWhere} AS count FROM access_logs WHERE created_at >= ?`).get(today).count || 0,
-    todayRawRequests: countWhere('WHERE created_at >= ?', [today]),
+    // 主访问口径：只统计真实前台业务访问；同一 IP 每天只计 1 次。管理员、验证脚本、机器人/探测流量单独列出。
+    totalRequests: countBusinessIpDays(),
+    rawRequests: countBusiness(),
+    repeatRequests: Math.max(0, countBusiness() - countBusinessIpDays()),
+    allRawRequests: countWhere(''),
+    adminRawRequests: db.prepare(`SELECT COUNT(*) AS count FROM access_logs WHERE ${adminTrafficWhere}`).get().count || 0,
+    systemRawRequests: db.prepare(`SELECT COUNT(*) AS count FROM access_logs WHERE ${systemTrafficWhere}`).get().count || 0,
+    probeRawRequests: db.prepare(`SELECT COUNT(*) AS count FROM access_logs WHERE ${probeTrafficWhere}`).get().count || 0,
+    totalVisitors: db.prepare(`SELECT COUNT(DISTINCT visitor_id) AS count FROM access_logs WHERE ${businessTrafficWhere}`).get().count || 0,
+    uniqueIpDays: countBusinessIpDays(),
+    todayRequests: countBusinessIpDays('AND created_at >= ?', [today]),
+    todayRawRequests: countBusiness('AND created_at >= ?', [today]),
     todayRepeatRequests: 0,
-    todayVisitors: db.prepare('SELECT COUNT(DISTINCT visitor_id) AS count FROM access_logs WHERE created_at >= ?').get(today).count || 0,
-    todayPageViews: db.prepare(`SELECT COUNT(DISTINCT ${ipDayExpr}) AS count FROM access_logs WHERE created_at >= ? AND (${pagePathWhere} OR path = '/client/pageview')`).get(today).count || 0,
-    todayRawPageViews: db.prepare(`SELECT COUNT(*) AS count FROM access_logs WHERE created_at >= ? AND (${pagePathWhere} OR path = '/client/pageview')`).get(today).count || 0,
-    activeVisitors5m: db.prepare('SELECT COUNT(DISTINCT ip_hash) AS count FROM access_logs WHERE created_at >= ?').get(fiveMinutesAgo).count || 0,
-    avgDurationMs: Math.round(db.prepare('SELECT AVG(duration_ms) AS avg FROM access_logs WHERE created_at >= ?').get(since).avg || 0),
-    errorCount: db.prepare(`SELECT COUNT(DISTINCT ${ipDayExpr}) AS count FROM access_logs WHERE created_at >= ? AND status >= 400`).get(since).count || 0,
+    todayVisitors: db.prepare(`SELECT COUNT(DISTINCT visitor_id) AS count FROM access_logs WHERE ${businessTrafficWhere} AND created_at >= ?`).get(today).count || 0,
+    todayPageViews: db.prepare(`SELECT COUNT(DISTINCT ${ipDayExpr}) AS count FROM access_logs WHERE ${businessTrafficWhere} AND created_at >= ? AND (${pagePathWhere} OR path = '/client/pageview')`).get(today).count || 0,
+    todayRawPageViews: db.prepare(`SELECT COUNT(*) AS count FROM access_logs WHERE ${businessTrafficWhere} AND created_at >= ? AND (${pagePathWhere} OR path = '/client/pageview')`).get(today).count || 0,
+    activeVisitors5m: db.prepare(`SELECT COUNT(DISTINCT ip_hash) AS count FROM access_logs WHERE ${businessTrafficWhere} AND created_at >= ?`).get(fiveMinutesAgo).count || 0,
+    avgDurationMs: Math.round(db.prepare(`SELECT AVG(duration_ms) AS avg FROM access_logs WHERE ${businessTrafficWhere} AND created_at >= ?`).get(since).avg || 0),
+    errorCount: db.prepare(`SELECT COUNT(DISTINCT ${ipDayExpr}) AS count FROM access_logs WHERE ${businessTrafficWhere} AND created_at >= ? AND status >= 400`).get(since).count || 0,
     rawErrorCount: countWhere('WHERE created_at >= ? AND status >= 400', [since]),
     galleryItems: db.prepare('SELECT COUNT(*) AS count FROM gallery_items').get().count || 0,
     galleryLikes: db.prepare('SELECT COALESCE(SUM(likes), 0) AS count FROM gallery_items').get().count || 0,
@@ -286,7 +296,7 @@ app.get('/api/admin/monitor', (req, res) => {
            COUNT(DISTINCT CASE WHEN ${pagePathWhere} OR path = '/client/pageview' THEN ${ipDayExpr} END) AS pageViews,
            SUM(CASE WHEN ${pagePathWhere} OR path = '/client/pageview' THEN 1 ELSE 0 END) AS rawPageViews
     FROM access_logs
-    WHERE created_at >= ?
+    WHERE ${businessTrafficWhere} AND created_at >= ?
     GROUP BY day
     ORDER BY day ASC
   `).all(since);
@@ -298,7 +308,7 @@ app.get('/api/admin/monitor', (req, res) => {
            MAX(COUNT(*) - COUNT(DISTINCT ${ipDayExpr}), 0) AS repeatRequests,
            COUNT(DISTINCT ip_hash) AS visitors
     FROM access_logs
-    WHERE created_at >= ?
+    WHERE ${businessTrafficWhere} AND created_at >= ?
     GROUP BY hour
     ORDER BY hour ASC
   `).all(now - 24 * 60 * 60 * 1000);
@@ -310,7 +320,7 @@ app.get('/api/admin/monitor', (req, res) => {
            MAX(COUNT(*) - COUNT(DISTINCT ${ipDayExpr}), 0) AS repeatCount,
            COUNT(DISTINCT ip_hash) AS visitors
     FROM access_logs
-    WHERE created_at >= ?
+    WHERE ${businessTrafficWhere} AND created_at >= ?
     GROUP BY path
     ORDER BY count DESC, rawCount DESC
     LIMIT 12
@@ -322,7 +332,7 @@ app.get('/api/admin/monitor', (req, res) => {
            COUNT(*) AS rawCount,
            MAX(COUNT(*) - COUNT(DISTINCT ${ipDayExpr}), 0) AS repeatCount,
            COUNT(DISTINCT ip_hash) AS visitors
-    FROM access_logs WHERE created_at >= ?
+    FROM access_logs WHERE ${businessTrafficWhere} AND created_at >= ?
     GROUP BY name ORDER BY count DESC, rawCount DESC LIMIT 12
   `).all(since);
 
@@ -332,7 +342,7 @@ app.get('/api/admin/monitor', (req, res) => {
            COUNT(*) AS rawCount,
            MAX(COUNT(*) - COUNT(DISTINCT ${ipDayExpr}), 0) AS repeatCount,
            COUNT(DISTINCT ip_hash) AS visitors
-    FROM access_logs WHERE created_at >= ?
+    FROM access_logs WHERE ${businessTrafficWhere} AND created_at >= ?
     GROUP BY name ORDER BY count DESC, rawCount DESC LIMIT 12
   `).all(since);
 
@@ -342,7 +352,7 @@ app.get('/api/admin/monitor', (req, res) => {
            COUNT(*) AS rawCount,
            MAX(COUNT(*) - COUNT(DISTINCT ${ipDayExpr}), 0) AS repeatCount,
            COUNT(DISTINCT ip_hash) AS visitors
-    FROM access_logs WHERE created_at >= ?
+    FROM access_logs WHERE ${businessTrafficWhere} AND created_at >= ?
     GROUP BY device_type ORDER BY count DESC, rawCount DESC
   `).all(since);
 
@@ -403,7 +413,13 @@ app.get('/api/admin/monitor', (req, res) => {
            date(created_at / 1000, 'unixepoch', 'localtime') AS access_day,
            COALESCE(NULLIF(country, ''), '未知') AS country,
            COALESCE(NULLIF(timezone, ''), '') AS timezone,
-           COALESCE(NULLIF(language, ''), '') AS language
+           COALESCE(NULLIF(language, ''), '') AS language,
+           CASE
+             WHEN ${adminTrafficWhere} THEN 'admin'
+             WHEN ${probeTrafficWhere} THEN 'probe'
+             WHEN ${systemTrafficWhere} THEN 'system'
+             ELSE 'business'
+           END AS traffic_class
     FROM access_logs
     ORDER BY created_at DESC
     LIMIT 50
@@ -432,14 +448,15 @@ app.get('/api/admin/monitor', (req, res) => {
       ipHash: row.ip_hash.slice(0, 8),
       visitIndexForIpDay,
       sameIpDayTotal,
-      duplicateIpDay: visitIndexForIpDay > 1
+      duplicateIpDay: visitIndexForIpDay > 1,
+      trafficClass: row.traffic_class
     };
   });
 
   res.json({
     ok: true,
     days,
-    metricPolicy: '同一 IP 每天只计 1 次；重复访问只在明细中标记，不计入访问总数。',
+    metricPolicy: '主指标只统计真实前台业务访问：排除管理员后台、助手/本机验证脚本、机器人和探测请求；同一 IP 每天只计 1 次。原始/系统/管理/探测流量单独展示。',
     summary,
     daily,
     hourly,
