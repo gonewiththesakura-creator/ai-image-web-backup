@@ -83,6 +83,16 @@
       align-items: center;
       gap: 6px;
     }
+    .app-shell { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 22px; align-items: start; margin-top: 22px; }
+    .side-drawer { position: sticky; top: 18px; padding: 16px; border-radius: var(--radius); background: rgba(15, 23, 42, .86); border: 1px solid var(--line); box-shadow: var(--shadow); backdrop-filter: blur(18px); }
+    .drawer-title { color: #dbeafe; font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; margin: 2px 0 12px; opacity: .86; }
+    .drawer-nav { display: grid; gap: 10px; }
+    .drawer-nav button { width: 100%; justify-content: flex-start; border: 1px solid transparent; border-radius: 16px; background: rgba(2, 6, 23, .36); box-shadow: none; color: #cbd5e1; padding: 13px 14px; }
+    .drawer-nav button.active { background: linear-gradient(135deg, rgba(79,140,255,.92), rgba(37,99,235,.88)); color: #fff; border-color: rgba(191,219,254,.26); box-shadow: 0 14px 32px rgba(37,99,235,.25); }
+    .drawer-nav button .nav-emoji { width: 22px; text-align: center; }
+    .drawer-hint { margin-top: 14px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .view-panel { display: none; }
+    .view-panel.active { display: block; }
     .hero { display: grid; grid-template-columns: 430px 1fr; gap: 22px; align-items: start; }
     .card { background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: var(--radius); backdrop-filter: blur(18px); }
     .form { padding: 24px; position: sticky; top: 18px; }
@@ -200,14 +210,22 @@
     .heart-pop.show { animation: heartPop .72s ease both; }
     @keyframes heartPop { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.35); } 35% { opacity: 1; transform: translate(-50%, -50%) scale(1.18); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(.88); } }
     .spinner { display: inline-block; width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.35); border-top-color: white; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 8px; }
-    .inspire { margin-top: 22px; padding: 24px; }
+    .inspire { padding: 24px; }
     .inspire-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
     .sort-tabs { display: flex; gap: 8px; align-items: center; }
     .sort-tabs button { padding: 9px 13px; font-size: 13px; box-shadow: none; background: rgba(2, 6, 23, .38); border: 1px solid var(--line); color: #cbd5e1; }
     .sort-tabs button.active { background: linear-gradient(135deg, rgba(79,140,255,.8), rgba(37,99,235,.8)); color: white; }
     .small-note { color: var(--muted); font-size: 13px; line-height: 1.5; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } .form { position: static; } header { align-items: flex-start; flex-direction: column; } }
+    @media (max-width: 900px) {
+      .app-shell { grid-template-columns: 1fr; gap: 14px; }
+      .side-drawer { position: sticky; top: 0; z-index: 12; border-radius: 0 0 18px 18px; margin: 0 -18px; }
+      .drawer-nav { grid-template-columns: 1fr 1fr; }
+      .drawer-hint, .drawer-title { display: none; }
+      .hero { grid-template-columns: 1fr; }
+      .form { position: static; }
+      header { align-items: flex-start; flex-direction: column; }
+    }
   </style>
 </head>
 <body>
@@ -237,7 +255,19 @@
       <a href="http://47.243.210.214:8080" target="_blank" rel="noopener" class="promo-btn">立即注册领取</a>
     </div>
 
-    <main class="hero">
+    <div class="app-shell">
+      <aside class="side-drawer" aria-label="功能导航">
+        <div class="drawer-title">工作区</div>
+        <nav class="drawer-nav">
+          <button type="button" class="active" data-view-tab="draw"><span class="nav-emoji">🎨</span><span>绘图</span></button>
+          <button type="button" data-view-tab="gallery"><span class="nav-emoji">🖼️</span><span>画廊</span></button>
+        </nav>
+        <div class="drawer-hint">绘图区和画廊已分开，左侧可随时切换。</div>
+      </aside>
+
+      <div class="workspace">
+        <section class="view-panel active" data-view-panel="draw">
+          <main class="hero">
       <section class="card form">
         <label for="apiKey">API Key <span style="color: var(--muted); font-weight: normal;">(可选，未输入时使用免费体验额度)</span></label>
         <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="请输入 API Key，或留空使用免费体验" />
@@ -313,12 +343,14 @@
           <div class="pill" id="countPill">0 张图片</div>
         </div>
         <div id="resultMeta" class="result-meta"></div>
-        <div id="empty" class="empty"><div><strong>还没有图片</strong>输入 API Key 和图片描述后点击生成；也可以在下方画廊点击“套用提示词”。</div></div>
+        <div id="empty" class="empty"><div><strong>还没有图片</strong>输入 API Key 和图片描述后点击生成；也可以切换到左侧“画廊”套用提示词。</div></div>
         <div id="images" class="images"></div>
       </section>
-    </main>
+          </main>
+        </section>
 
-    <section class="card inspire">
+        <section class="view-panel" data-view-panel="gallery">
+          <section class="card inspire">
       <div class="inspire-head">
         <div>
           <h2>灵感画廊</h2>
@@ -333,7 +365,10 @@
         </div>
       </div>
       <div id="inspireGrid" class="inspire-grid feed"></div>
-    </section>
+          </section>
+        </section>
+      </div>
+    </div>
   </div>
   <div id="toast" class="toast"></div>
   <div id="heartPop" class="heart-pop">❤️</div>
@@ -382,6 +417,8 @@
     const referenceInput = $('referenceImages');
     const referencePreview = $('referencePreview');
     const referenceModeText = $('referenceModeText');
+    const viewTabs = Array.from(document.querySelectorAll('[data-view-tab]'));
+    const viewPanels = Array.from(document.querySelectorAll('[data-view-panel]'));
 
     const API_PREFIX = location.pathname.startsWith('/draw') ? '/draw-api' : '/api';
     const API_ENDPOINT = `${API_PREFIX}/generate-image`;
@@ -498,6 +535,13 @@
       } finally {
         referenceInput.value = '';
       }
+    }
+
+    function switchView(name) {
+      viewTabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.viewTab === name));
+      viewPanels.forEach((panel) => panel.classList.toggle('active', panel.dataset.viewPanel === name));
+      if (name === 'gallery' && galleryItems.length === 0) loadGallery(currentSort);
+      window.history.replaceState(null, '', name === 'gallery' ? '#gallery' : '#draw');
     }
 
     const savedKey = localStorage.getItem('dreamapi_image_key');
@@ -779,6 +823,8 @@
     function usePrompt(prompt, id) {
       $('prompt').value = prompt;
       $('prompt').focus();
+      switchView('draw');
+      showToast('提示词已套用到输入框');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       if (id) viewItem(id);
       setStatus('已套用画廊提示词，可以输入 API Key 后直接生成。', 'ok');
@@ -877,6 +923,10 @@
         galleryLoading = false;
       }
     }
+
+    viewTabs.forEach((tab) => tab.addEventListener('click', () => switchView(tab.dataset.viewTab)));
+    window.addEventListener('hashchange', () => switchView(location.hash === '#gallery' ? 'gallery' : 'draw'));
+    switchView(location.hash === '#gallery' ? 'gallery' : 'draw');
 
     referenceInput.addEventListener('change', (ev) => handleReferenceFiles(ev.target.files));
     referencePreview.addEventListener('click', (ev) => {
