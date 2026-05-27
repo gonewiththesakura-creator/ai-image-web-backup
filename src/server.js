@@ -529,6 +529,46 @@ function publicError(status, message) {
   return err;
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientUpstreamFetchError(err) {
+  if (!err || err.name === 'AbortError') return false;
+  const code = err.cause?.code || err.code || '';
+  const message = String(err.message || err.cause?.message || '').toLowerCase();
+  return code === 'UND_ERR_SOCKET'
+    || code === 'ECONNRESET'
+    || code === 'EPIPE'
+    || code === 'ETIMEDOUT'
+    || message.includes('fetch failed')
+    || message.includes('socket')
+    || message.includes('other side closed')
+    || message.includes('broken pipe')
+    || message.includes('stream error');
+}
+
+async function fetchUpstreamWithRetry(makeRequest, { attempts = 2, label = 'upstream' } = {}) {
+  let lastErr;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await makeRequest(attempt);
+    } catch (err) {
+      lastErr = err;
+      if (attempt >= attempts || !isTransientUpstreamFetchError(err)) throw err;
+      console.warn(`[${label}] transient fetch error, retrying`, {
+        attempt,
+        name: err?.name,
+        message: err?.message,
+        cause: err?.cause?.message,
+        code: err?.cause?.code || err?.code
+      });
+      await delay(1200 * attempt);
+    }
+  }
+  throw lastErr;
+}
+
 function parseReferenceImages(input) {
   const items = Array.isArray(input) ? input.slice(0, MAX_REFERENCE_IMAGES) : [];
   if (Array.isArray(input) && input.length > MAX_REFERENCE_IMAGES) {
@@ -1013,44 +1053,49 @@ app.post('/api/generate-image', limiter, async (req, res) => {
       throw publicError(500, '试用服务暂时不可用，请输入 API Key 使用。');
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
     let upstreamResp;
     if (referenceImages.length) {
-      const form = new FormData();
-      form.append('model', IMAGE_MODEL);
-      form.append('prompt', finalPrompt);
-      form.append('size', finalSize);
-      form.append('quality', quality);
-      form.append('output_format', output_format);
-      form.append('n', String(n));
-      for (const ref of referenceImages) {
-        form.append('image', new Blob([ref.buffer], { type: ref.type }), ref.filename);
-      }
-      upstreamResp = await fetch(`${API_BASE_URL}/images/edits`, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: { Authorization: `Bearer ${effectiveApiKey}` },
-        body: form
-      }).finally(() => clearTimeout(timeout));
+      upstreamResp = await fetchUpstreamWithRetry(async () => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        const form = new FormData();
+        form.append('model', IMAGE_MODEL);
+        form.append('prompt', finalPrompt);
+        form.append('size', finalSize);
+        form.append('quality', quality);
+        form.append('output_format', output_format);
+        form.append('n', String(n));
+        for (const ref of referenceImages) {
+          form.append('image', new Blob([ref.buffer], { type: ref.type }), ref.filename);
+        }
+        return fetch(`${API_BASE_URL}/images/edits`, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: { Authorization: `Bearer ${effectiveApiKey}` },
+          body: form
+        }).finally(() => clearTimeout(timeout));
+      }, { attempts: 2, label: 'generate-image:edits' });
     } else {
-      upstreamResp = await fetch(`${API_BASE_URL}/images/generations`, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${effectiveApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: IMAGE_MODEL,
-          prompt: finalPrompt,
-          size: finalSize,
-          quality,
-          output_format,
-          n
-        })
-      }).finally(() => clearTimeout(timeout));
+      upstreamResp = await fetchUpstreamWithRetry(async () => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        return fetch(`${API_BASE_URL}/images/generations`, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${effectiveApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: IMAGE_MODEL,
+            prompt: finalPrompt,
+            size: finalSize,
+            quality,
+            output_format,
+            n
+          })
+        }).finally(() => clearTimeout(timeout));
+      }, { attempts: 2, label: 'generate-image:generations' });
     }
 
     let upstreamData = null;
