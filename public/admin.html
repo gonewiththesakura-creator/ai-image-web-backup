@@ -115,24 +115,24 @@
 
       <section id="monitorSection">
         <div class="analytics-link-card">
-          <strong>网站统计已直接接入当前后台</strong>
-          <div>下方数据来自 Umami PostgreSQL 真实采集：页面访问、访客、来源、设备、地区，以及生成/注册/参考图等行为事件。</div>
-          <div class="note">如需打开原始 Umami 后台，可访问：<a href="/umami/" target="_blank" rel="noopener">/umami/</a>。画廊管理与统计展示相互独立。</div>
+          <strong>网站统计</strong>
+          <div>数据来自线上真实访问和前台行为事件，包含访问、访客、来源、设备、地区、生成、注册、参考图和画廊发布。</div>
+          <div class="note">统计展示与画廊管理相互独立；统计异常不会影响作品管理。</div>
         </div>
-        <div class="metric-policy" id="metricPolicy">统计口径：主指标只统计真实前台业务访问；管理员后台、助手验证、本机 curl、机器人/探测请求不计入主访问数。</div>
+        <div class="metric-policy" id="metricPolicy">统计口径：只展示真实前台业务访问；后台管理、系统验证、机器人和探测请求不计入主指标。</div>
         <div class="stats">
-          <div class="stat-card"><div class="stat-value" id="todayRequests">0</div><div class="stat-label">今日访问 IP（日去重）</div><div class="stat-note" id="totalRequests">累计 0</div></div>
-          <div class="stat-card"><div class="stat-value" id="todayVisitors">0</div><div class="stat-label">今日匿名访客</div><div class="stat-note" id="totalVisitors">累计 0</div></div>
-          <div class="stat-card"><div class="stat-value" id="activeVisitors5m">0</div><div class="stat-label">5 分钟活跃 IP</div><div class="stat-note" id="todayPageViews">今日页面访问 0</div></div>
-          <div class="stat-card"><div class="stat-value" id="generationsToday">0</div><div class="stat-label">今日作画次数</div><div class="stat-note" id="errorCount">错误 0</div></div>
-          <div class="stat-card"><div class="stat-value" id="generationsWeek">0</div><div class="stat-label">本周作画次数</div><div class="stat-note" id="generationsWeekRaw">原始 0</div></div>
-          <div class="stat-card"><div class="stat-value" id="generationsMonth">0</div><div class="stat-label">本月作画次数</div><div class="stat-note" id="generationsMonthRaw">原始 0</div></div>
-          <div class="stat-card"><div class="stat-value" id="totalGenerations">0</div><div class="stat-label">累计作画次数</div><div class="stat-note" id="totalGenerationsRaw">原始 0</div></div>
-          <div class="stat-card"><div class="stat-value" id="galleryItemCount">0</div><div class="stat-label">画廊作品</div><div class="stat-note">公开画廊总量</div></div>
-          <div class="stat-card"><div class="stat-value" id="galleryLikeCount">0</div><div class="stat-label">画廊点赞</div><div class="stat-note">累计互动</div></div>
-          <div class="stat-card"><div class="stat-value" id="galleryViewCount">0</div><div class="stat-label">画廊浏览</div><div class="stat-note">作品浏览量</div></div>
-          <div class="stat-card"><div class="stat-value" id="avgDurationMs">0ms</div><div class="stat-label">平均响应</div><div class="stat-note">业务访问窗口</div></div>
-          <div class="stat-card"><div class="stat-value" id="allRawRequests">0</div><div class="stat-label">全部原始日志</div><div class="stat-note" id="noiseRequests">管理/系统/探测 0</div></div>
+          <div class="stat-card"><div class="stat-value" id="todayRequests">0</div><div class="stat-label">今日页面访问</div><div class="stat-note" id="totalRequests">近 7 天页面访问 0</div></div>
+          <div class="stat-card"><div class="stat-value" id="todayVisitors">0</div><div class="stat-label">今日访客</div><div class="stat-note" id="totalVisitors">近 7 天访客 0</div></div>
+          <div class="stat-card"><div class="stat-value" id="activeVisitors5m">0</div><div class="stat-label">行为事件</div><div class="stat-note" id="todayPageViews">注册点击 0</div></div>
+          <div class="stat-card"><div class="stat-value" id="generationsToday">0</div><div class="stat-label">今日生成点击</div><div class="stat-note" id="errorCount">今日错误 0</div></div>
+          <div class="stat-card"><div class="stat-value" id="generationsWeek">0</div><div class="stat-label">近选定周期生成点击</div><div class="stat-note" id="generationsWeekRaw">成功 0｜失败 0</div></div>
+          <div class="stat-card"><div class="stat-value" id="generationsMonth">0</div><div class="stat-label">生成成功</div><div class="stat-note" id="generationsMonthRaw">今日成功 0｜今日失败 0</div></div>
+          <div class="stat-card"><div class="stat-value" id="totalGenerations">0</div><div class="stat-label">参考图上传</div><div class="stat-note" id="totalGenerationsRaw">参考图事件</div></div>
+          <div class="stat-card"><div class="stat-value" id="galleryItemCount">0</div><div class="stat-label">画廊发布</div><div class="stat-note">发布成功事件</div></div>
+          <div class="stat-card"><div class="stat-value" id="galleryLikeCount">0</div><div class="stat-label">注册点击</div><div class="stat-note">注册入口点击</div></div>
+          <div class="stat-card"><div class="stat-value" id="galleryViewCount">0</div><div class="stat-label">全部行为事件</div><div class="stat-note">前台行为埋点</div></div>
+          <div class="stat-card"><div class="stat-value" id="avgDurationMs">0%</div><div class="stat-label">生成成功率</div><div class="stat-note">成功 / 点击</div></div>
+          <div class="stat-card"><div class="stat-value" id="allRawRequests">0</div><div class="stat-label">访问 + 事件</div><div class="stat-note" id="noiseRequests">访问 0｜事件 0</div></div>
         </div>
 
         <div class="monitor-grid">
@@ -145,15 +145,15 @@
         </div>
         <div class="monitor-grid">
           <div class="panel"><h2>热门路径</h2><div id="pathList" class="list"></div></div>
-          <div class="panel"><h2>时区分布</h2><div id="timezoneList" class="list"></div></div>
+          <div class="panel"><h2>行为事件</h2><div id="timezoneList" class="list"></div></div>
         </div>
         <div class="monitor-grid">
           <div class="panel"><h2>每日作画趋势</h2><div id="generationDailyList" class="list"></div></div>
-          <div class="panel"><h2>每周 / 每月作画</h2><div id="generationPeriodList" class="list"></div></div>
+          <div class="panel"><h2>行为事件排行</h2><div id="generationPeriodList" class="list"></div></div>
         </div>
         <div class="monitor-grid">
           <div class="panel"><h2>来源 Referer</h2><div id="refererList" class="list"></div></div>
-          <div class="panel"><h2>最近访问</h2><div style="overflow:auto;max-height:420px"><table><thead><tr><th>时间</th><th>路径</th><th>状态</th><th>设备</th><th>地区</th><th>IP/访客</th><th>类别/重复</th></tr></thead><tbody id="recentRows"></tbody></table></div></div>
+          <div class="panel"><h2>最近访问</h2><div style="overflow:auto;max-height:420px"><table><thead><tr><th>时间</th><th>路径</th><th>类型</th><th>设备</th><th>地区</th><th>事件 / 环境</th><th>来源</th></tr></thead><tbody id="recentRows"></tbody></table></div></div>
         </div>
       </section>
 
@@ -213,7 +213,7 @@
         adminPanel.classList.remove('hidden');
         loginBtn.disabled = false;
         loginBtn.textContent = '登录';
-        await loadMonitor().catch(err => showStatus(`Umami 统计暂不可用：${err.message || '统计加载失败'}。画廊管理仍可正常使用。`, 'error'));
+        await loadMonitor().catch(err => showStatus(`统计暂不可用：${err.message || '统计加载失败'}。画廊管理仍可正常使用。`, 'error'));
         await loadGallery();
       } catch (err) {
         showStatus(err.message || '登录失败', 'error', loginStatus);
@@ -265,8 +265,8 @@
       $('galleryViewCount').textContent = fmt(s.customEvents);
       $('avgDurationMs').textContent = `${s.generateClicks ? Math.round(s.generateSuccess / s.generateClicks * 100) : 0}%`;
       $('allRawRequests').textContent = fmt(s.pageviews + s.customEvents);
-      $('noiseRequests').textContent = `Umami 原始采集：访问 ${fmt(s.pageviews)}｜事件 ${fmt(s.customEvents)}`;
-      $('metricPolicy').textContent = `统计口径：${data.metricPolicy || 'Umami 真实采集数据。'}`;
+      $('noiseRequests').textContent = `访问 ${fmt(s.pageviews)}｜事件 ${fmt(s.customEvents)}`;
+      $('metricPolicy').textContent = `统计口径：${data.metricPolicy || '真实前台业务访问与行为事件。'}`;
       renderChart('hourlyChart', data.hourly || [], 'hour', 'pageviews');
       renderChart('dailyChart', data.daily || [], 'day', 'pageviews');
       renderList('deviceList', data.devices || []);
@@ -283,7 +283,7 @@
       const daily = stats.daily || [];
       $('generationDailyList').innerHTML = daily.slice(-14).reverse().map(r => `<div class="row"><div class="name">${escapeHtml(r.day)}</div><div class="num">${fmt(r.generateClicks)}</div><div class="sub">成功 ${fmt(r.generateSuccess)}｜失败 ${fmt(r.generateErrors)}｜页面访问 ${fmt(r.pageviews)}｜访客 ${fmt(r.visitors)}</div></div>`).join('') || '<div style="color:var(--muted)">暂无真实作画记录</div>';
       const events = stats.events || [];
-      $('generationPeriodList').innerHTML = events.map(r => `<div class="row"><div class="name">${escapeHtml(r.name)}</div><div class="num">${fmt(r.count)}</div><div class="sub">Umami 行为事件</div></div>`).join('') || '<div style="color:var(--muted)">暂无行为事件</div>';
+      $('generationPeriodList').innerHTML = events.map(r => `<div class="row"><div class="name">${escapeHtml(r.name)}</div><div class="num">${fmt(r.count)}</div><div class="sub">行为事件</div></div>`).join('') || '<div style="color:var(--muted)">暂无行为事件</div>';
     }
 
     function renderChart(id, rows, labelKey, valueKey) {
@@ -296,7 +296,7 @@
     }
 
     function renderList(id, rows, nameKey = 'name') {
-      $(id).innerHTML = rows.map(r => `<div class="row"><div class="name" title="${escapeHtml(r[nameKey])}">${escapeHtml(r[nameKey])}</div><div class="num">${fmt(r.count)}</div><div class="sub">${r.visitors !== undefined ? `访客 ${fmt(r.visitors)}` : 'Umami'}</div></div>`).join('') || '<div style="color:var(--muted)">暂无数据</div>';
+      $(id).innerHTML = rows.map(r => `<div class="row"><div class="name" title="${escapeHtml(r[nameKey])}">${escapeHtml(r[nameKey])}</div><div class="num">${fmt(r.count)}</div><div class="sub">${r.visitors !== undefined ? `访客 ${fmt(r.visitors)}` : '行为事件'}</div></div>`).join('') || '<div style="color:var(--muted)">暂无数据</div>';
     }
 
     async function loadGallery(append = false) {
@@ -331,7 +331,7 @@
         renderGallery();
         showStatus('删除成功', 'success');
         updateStats(parseInt($('totalCount').textContent.replace(/,/g,'')) - 1);
-        loadMonitor().catch(err => showStatus(`Umami 统计暂不可用：${err.message || '统计加载失败'}。`, 'error'));
+        loadMonitor().catch(err => showStatus(`统计暂不可用：${err.message || '统计加载失败'}。`, 'error'));
       } catch (err) {
         if (/管理员密码错误|未登录|403/i.test(String(err.message || ''))) {
           localStorage.removeItem('admin_password'); password = ''; adminPanel.classList.add('hidden'); loginBox.classList.remove('hidden'); passwordInput.focus();
@@ -344,7 +344,7 @@
       document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
       $('monitorSection').classList.toggle('hidden', tab !== 'monitor');
       $('gallerySection').classList.toggle('hidden', tab !== 'gallery');
-      if (tab === 'monitor') loadMonitor().catch(err => showStatus(`Umami 统计暂不可用：${err.message || '统计加载失败'}。`, 'error'));
+      if (tab === 'monitor') loadMonitor().catch(err => showStatus(`统计暂不可用：${err.message || '统计加载失败'}。`, 'error'));
     }
 
     function escapeHtml(text) { return String(text || '').replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m])); }
@@ -353,10 +353,10 @@
     passwordInput.onkeydown = (e) => { if (e.key === 'Enter') login(); };
     loadMoreBtn.onclick = () => loadGallery(true);
     $('refreshBtn').onclick = () => Promise.all([
-      loadMonitor().catch(err => showStatus(`Umami 统计暂不可用：${err.message || '统计加载失败'}。`, 'error')),
+      loadMonitor().catch(err => showStatus(`统计暂不可用：${err.message || '统计加载失败'}。`, 'error')),
       loadGallery()
     ]).then(() => showStatus('刷新完成', 'success')).catch(err => showStatus(err.message || '刷新失败', 'error'));
-    $('monitorDays').onchange = () => loadMonitor().catch(err => showStatus(`Umami 统计暂不可用：${err.message || '统计加载失败'}。`, 'error'));
+    $('monitorDays').onchange = () => loadMonitor().catch(err => showStatus(`统计暂不可用：${err.message || '统计加载失败'}。`, 'error'));
     document.querySelectorAll('.tab-btn').forEach(btn => btn.onclick = () => switchTab(btn.dataset.tab));
     gallery.addEventListener('click', (event) => { const btn = event.target.closest('[data-delete-id]'); if (btn) deleteItem(btn.dataset.deleteId); });
 
