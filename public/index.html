@@ -580,11 +580,15 @@
         } else if (p < 70) {
           p += 2;
           setProgress(p, '正在绘制图片...');
-        } else if (p < 92) {
+        } else if (p < 88) {
           p += 1;
-          setProgress(p, '正在等待高清结果...');
+          setProgress(p, '正在生成图片...');
+        } else if (p < 98) {
+          const messages = ['图片生成通常需要 1-3 分钟，请保持页面打开...', '正在等待模型返回结果...', '复杂提示词或高峰期会更久一些...'];
+          p += Math.random() < 0.28 ? 1 : 0;
+          setProgress(p, messages[Math.floor(Date.now() / 6000) % messages.length]);
         }
-      }, 900);
+      }, 1200);
     }
 
     function finishProgress(ok) {
@@ -953,11 +957,12 @@
         return;
       }
 
-      const size = referenceImages.length ? '1024x1024' : $('sizePreset').value;
-      const clarity = $('clarity').value;
-      const format = $('format').value;
+      const usingTrial = !apiKey;
+      const size = usingTrial ? '1024x1024' : (referenceImages.length ? '1024x1024' : $('sizePreset').value);
+      const clarity = usingTrial ? 'standard' : $('clarity').value;
+      const format = usingTrial ? 'webp' : $('format').value;
       const batchMode = 'sequential';
-      const outputMode = referenceImages.length ? 'standard' : (clarityToOutputMode[clarity] || '2k');
+      const outputMode = usingTrial ? 'standard' : (referenceImages.length ? 'standard' : (clarityToOutputMode[clarity] || '2k'));
       const count = Number($('n').value) || 1;
       trackEvent('generate_click', {
         count,
@@ -979,7 +984,7 @@
       setResultMeta({
         prompt,
         size: referenceImages.length ? '参考图稳妥模式 · 1:1 方图' : humanSizeLabel(size),
-        clarity: humanClarityLabel(clarity),
+        clarity: usingTrial ? '免费体验标准模式' : humanClarityLabel(clarity),
         format: humanFormatLabel(format),
         batchMode: humanBatchModeLabel(batchMode),
         count: Number($('n').value) || 1,
@@ -1013,6 +1018,10 @@
         allImages.push(...images);
         successCount += images.length;
         renderImages(allImages);
+        if (!apiKey && data.trial) {
+          trialQuota.style.display = 'inline-flex';
+          trialQuotaText.textContent = `免费体验剩余 ${data.trial.remaining}/${data.trial.total} 张`;
+        }
       };
 
       try {

@@ -31,6 +31,13 @@ const UMAMI_DATABASE_URL = process.env.UMAMI_DATABASE_URL || '';
 const UMAMI_WEBSITE_ID = process.env.UMAMI_WEBSITE_ID || '595998a1-3596-4065-853e-6952ee26c957';
 const MAX_REFERENCE_IMAGES = 3;
 const MAX_REFERENCE_IMAGE_BYTES = 5 * 1024 * 1024;
+const TRIAL_TOTAL = Number(process.env.TRIAL_TOTAL || 5);
+const TRIAL_WINDOW_MS = 24 * 60 * 60 * 1000;
+const MAX_FINGERPRINTS_PER_IP = Number(process.env.MAX_FINGERPRINTS_PER_IP || 20);
+const FREE_DEFAULT_SIZE = process.env.FREE_DEFAULT_SIZE || '1024x1024';
+const FREE_DEFAULT_OUTPUT_MODE = process.env.FREE_DEFAULT_OUTPUT_MODE || 'standard';
+const FREE_DEFAULT_FORMAT = process.env.FREE_DEFAULT_FORMAT || 'webp';
+const FREE_DEFAULT_QUALITY = process.env.FREE_DEFAULT_QUALITY || 'low';
 
 const ALLOWED_SIZES = new Set([
   '1024x1024',
@@ -664,53 +671,70 @@ async function saveBase64Image(dataUrlOrBase64, format) {
 }
 
 // 试用额度检查和扣减
-function checkAndConsumeTrialQuota(fingerprint, ip) {
-  if (!fingerprint || !ip) return { allowed: false, reason: '缺少设备信息' };
-  
+function getTrialRecord(fingerprint, ip) {
   const now = Date.now();
-  const TRIAL_WINDOW_MS = 24 * 60 * 60 * 1000; // 24小时
-  const MAX_TRIAL_PER_FINGERPRINT = 5;
-  const MAX_FINGERPRINTS_PER_IP = 5;
-  
-  // 清理7天前的试用记录
+  const record = db.prepare('SELECT * FROM trial_usage WHERE fingerprint = ? AND ip = ?').get(fingerprint, ip);
+  if (!record) {
+    return { record: null, used: 0, remaining: TRIAL_TOTAL, reset: false };
+  }
+  const expired = now - record.first_used_at >= TRIAL_WINDOW_MS;
+  const used = expired ? 0 : Number(record.used_count || 0);
+  return {
+    record,
+    used,
+    remaining: Math.max(0, TRIAL_TOTAL - used),
+    reset: expired
+  };
+}
+
+function reserveTrialQuota(fingerprint, ip) {
+  if (!fingerprint || !ip) return { allowed: false, reason: '缺少设备信息', remaining: 0 };
+
+  const now = Date.now();
   db.prepare('DELETE FROM trial_usage WHERE last_used_at < ?').run(now - 7 * 24 * 60 * 60 * 1000);
-  
-  // 检查该指纹在24小时内的使用次数
-  const fpRecord = db.prepare('SELECT * FROM trial_usage WHERE fingerprint = ? AND ip = ?').get(fingerprint, ip);
-  
-  if (fpRecord) {
-    const timeSinceFirst = now - fpRecord.first_used_at;
-    if (timeSinceFirst < TRIAL_WINDOW_MS) {
-      if (fpRecord.used_count >= MAX_TRIAL_PER_FINGERPRINT) {
-        return { allowed: false, reason: '体验额度已用完，请注册获取 API Key', remaining: 0 };
-      }
-    } else {
-      // 超过24小时，重置计数
-      db.prepare('UPDATE trial_usage SET used_count = 1, first_used_at = ?, last_used_at = ? WHERE fingerprint = ? AND ip = ?')
-        .run(now, now, fingerprint, ip);
-      return { allowed: true, remaining: MAX_TRIAL_PER_FINGERPRINT - 1 };
+
+  const state = getTrialRecord(fingerprint, ip);
+  if (state.record && state.reset) {
+    db.prepare('UPDATE trial_usage SET first_used_at = ?, last_used_at = ? WHERE fingerprint = ? AND ip = ?')
+      .run(now, now, fingerprint, ip);
+    return { allowed: true, remaining: TRIAL_TOTAL };
+  }
+
+  if (state.remaining <= 0) {
+    return { allowed: false, reason: '体验额度已用完，请注册获取 API Key', remaining: 0 };
+  }
+
+  if (!state.record) {
+    const ipFingerprints = db.prepare(
+      'SELECT COUNT(DISTINCT fingerprint) as count FROM trial_usage WHERE ip = ? AND first_used_at > ?'
+    ).get(ip, now - TRIAL_WINDOW_MS);
+    if (ipFingerprints.count >= MAX_FINGERPRINTS_PER_IP) {
+      return { allowed: false, reason: '该网络环境体验设备数已达上限，请注册后使用 API Key', remaining: 0 };
     }
+    db.prepare('INSERT INTO trial_usage (fingerprint, ip, used_count, first_used_at, last_used_at) VALUES (?, ?, 0, ?, ?)')
+      .run(fingerprint, ip, now, now);
   }
-  
-  // 检查该IP在24小时内的不同指纹数量
-  const ipFingerprints = db.prepare(
-    'SELECT COUNT(DISTINCT fingerprint) as count FROM trial_usage WHERE ip = ? AND first_used_at > ?'
-  ).get(ip, now - TRIAL_WINDOW_MS);
-  
-  if (ipFingerprints.count >= MAX_FINGERPRINTS_PER_IP) {
-    return { allowed: false, reason: '该网络环境体验次数已达上限', remaining: 0 };
-  }
-  
-  // 扣减额度
-  if (fpRecord) {
-    db.prepare('UPDATE trial_usage SET used_count = used_count + 1, last_used_at = ? WHERE fingerprint = ? AND ip = ?')
-      .run(now, fingerprint, ip);
-    return { allowed: true, remaining: MAX_TRIAL_PER_FINGERPRINT - fpRecord.used_count - 1 };
-  } else {
+
+  return { allowed: true, remaining: state.remaining };
+}
+
+function commitTrialQuota(fingerprint, ip) {
+  const state = getTrialRecord(fingerprint, ip);
+  if (state.remaining <= 0) return { remaining: 0 };
+  const now = Date.now();
+  if (!state.record) {
     db.prepare('INSERT INTO trial_usage (fingerprint, ip, used_count, first_used_at, last_used_at) VALUES (?, ?, 1, ?, ?)')
       .run(fingerprint, ip, now, now);
-    return { allowed: true, remaining: MAX_TRIAL_PER_FINGERPRINT - 1 };
+    return { remaining: Math.max(0, TRIAL_TOTAL - 1) };
   }
+  if (state.reset) {
+    db.prepare('UPDATE trial_usage SET used_count = 1, first_used_at = ?, last_used_at = ? WHERE fingerprint = ? AND ip = ?')
+      .run(now, now, fingerprint, ip);
+    return { remaining: Math.max(0, TRIAL_TOTAL - 1) };
+  }
+  db.prepare('UPDATE trial_usage SET used_count = used_count + 1, last_used_at = ? WHERE fingerprint = ? AND ip = ?')
+    .run(now, fingerprint, ip);
+  return { remaining: Math.max(0, state.remaining - 1) };
 }
 
 // 查询试用额度
@@ -722,23 +746,9 @@ app.get('/api/trial-quota', (req, res) => {
     return res.json({ remaining: 0, total: 5, message: '缺少设备信息' });
   }
   
-  const now = Date.now();
-  const TRIAL_WINDOW_MS = 24 * 60 * 60 * 1000;
-  const MAX_TRIAL_PER_FINGERPRINT = 5;
-  
-  const fpRecord = db.prepare('SELECT * FROM trial_usage WHERE fingerprint = ? AND ip = ?').get(fingerprint, ip);
-  
-  if (!fpRecord) {
-    return res.json({ remaining: MAX_TRIAL_PER_FINGERPRINT, total: MAX_TRIAL_PER_FINGERPRINT, message: '可免费体验' });
-  }
-  
-  const timeSinceFirst = now - fpRecord.first_used_at;
-  if (timeSinceFirst >= TRIAL_WINDOW_MS) {
-    return res.json({ remaining: MAX_TRIAL_PER_FINGERPRINT, total: MAX_TRIAL_PER_FINGERPRINT, message: '额度已重置' });
-  }
-  
-  const remaining = Math.max(0, MAX_TRIAL_PER_FINGERPRINT - fpRecord.used_count);
-  return res.json({ remaining, total: MAX_TRIAL_PER_FINGERPRINT, message: remaining > 0 ? '可继续体验' : '体验额度已用完' });
+  const state = getTrialRecord(fingerprint, ip);
+  const message = state.remaining > 0 ? (state.reset ? '额度已重置' : '可继续体验') : '体验额度已用完';
+  return res.json({ remaining: state.remaining, total: TRIAL_TOTAL, message });
 });
 
 app.post('/api/generate-image', limiter, async (req, res) => {
@@ -752,21 +762,20 @@ app.post('/api/generate-image', limiter, async (req, res) => {
 
     const size = normalizeSize(req.body?.size);
     const hasReferenceImages = Array.isArray(req.body?.referenceImages) && req.body.referenceImages.length > 0;
-    const quality = hasReferenceImages ? 'auto' : pickAllowed(req.body?.quality, ALLOWED_QUALITIES, 'auto');
-    const outputMode = hasReferenceImages ? 'standard' : normalizeOutputMode(req.body?.outputMode);
-    const output_format = pickAllowed(req.body?.format, ALLOWED_FORMATS, 'png');
-    const n = normalizeCount(req.body?.n);
-    const finalSize = hasReferenceImages ? '1024x1024' : upscaleDimensions(size, outputMode);
     const referenceImages = await normalizeReferenceImages(req.body?.referenceImages);
-    
-    // 如果没有 API Key，检查试用额度。注意：参考图校验必须先完成，避免非法请求消耗试用额度。
-    let usingTrial = false;
-    if (!apiKey) {
-      const quota = checkAndConsumeTrialQuota(fingerprint, ip);
-      if (!quota.allowed) {
-        throw publicError(403, quota.reason);
+    const usingTrial = !apiKey;
+    const quality = usingTrial ? FREE_DEFAULT_QUALITY : (hasReferenceImages ? 'auto' : pickAllowed(req.body?.quality, ALLOWED_QUALITIES, 'auto'));
+    const outputMode = usingTrial ? FREE_DEFAULT_OUTPUT_MODE : (hasReferenceImages ? 'standard' : normalizeOutputMode(req.body?.outputMode));
+    const output_format = usingTrial ? pickAllowed(FREE_DEFAULT_FORMAT, ALLOWED_FORMATS, 'webp') : pickAllowed(req.body?.format, ALLOWED_FORMATS, 'png');
+    const n = normalizeCount(req.body?.n);
+    const finalSize = usingTrial ? FREE_DEFAULT_SIZE : (hasReferenceImages ? '1024x1024' : upscaleDimensions(size, outputMode));
+
+    let trialReservation = null;
+    if (usingTrial) {
+      trialReservation = reserveTrialQuota(fingerprint, ip);
+      if (!trialReservation.allowed) {
+        throw publicError(403, trialReservation.reason);
       }
-      usingTrial = true;
     }
 
     const finalPrompt = referenceImages.length
@@ -846,8 +855,10 @@ app.post('/api/generate-image', limiter, async (req, res) => {
       return res.status(502).json({ error: '上游没有返回图片，请稍后重试。' });
     }
 
+    const quota = usingTrial ? commitTrialQuota(fingerprint, ip) : null;
+
     // 只返回图片数组，不透传上游原始响应，确保网页不会展示聊天/文本内容。
-    res.json({ images });
+    res.json({ images, trial: quota ? { remaining: quota.remaining, total: TRIAL_TOTAL } : undefined });
   } catch (err) {
     console.error('[generate-image] error:', {
       name: err?.name,

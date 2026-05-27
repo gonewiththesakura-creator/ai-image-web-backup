@@ -42,7 +42,7 @@ async function run() {
   const health = await fetch(`${BASE_URL}/health`).then((r) => r.json());
   assert.equal(health.ok, true, 'health.ok should be true');
 
-  const missingKey = await postJson('/api/generate-image', {
+  const missingFingerprint = await postJson('/api/generate-image', {
     prompt: 'test prompt',
     size: '1024x1024',
     quality: 'auto',
@@ -50,7 +50,7 @@ async function run() {
     n: 1,
     format: 'png'
   });
-  assert.equal(missingKey.resp.status, 400, 'missing key should return 400');
+  assert.equal(missingFingerprint.resp.status, 403, 'free trial without fingerprint should return 403');
 
   if (!TEST_API_KEY) {
     console.log('Smoke checks passed (skipped live generation because TEST_API_KEY is not set).');
