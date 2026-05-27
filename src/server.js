@@ -20,7 +20,7 @@ const API_BASE_URL = (process.env.SUB2API_BASE_URL || 'http://127.0.0.1:8080/v1'
 const IMAGE_MODEL = process.env.IMAGE_MODEL || 'gpt-image-2';
 const PROMPT_OPTIMIZER_MODEL = process.env.PROMPT_OPTIMIZER_MODEL || 'gpt-5.5';
 const DEFAULT_CHAT_MODEL = process.env.DEFAULT_CHAT_MODEL || 'gpt-5.5';
-const CHAT_MODELS = (process.env.CHAT_MODELS || 'gpt-5.5,gpt-5.4,gpt-4o,claude-sonnet-4,o3-mini,astron-code-latest')
+const CHAT_MODELS = (process.env.CHAT_MODELS || 'gpt-5.5,gpt-5.4')
   .split(',')
   .map((item) => item.trim())
   .filter(Boolean);
