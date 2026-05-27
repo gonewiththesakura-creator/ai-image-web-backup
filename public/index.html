@@ -205,17 +205,18 @@
     .chat-session.active { background: #24211d; color: #fffaf2; }
     .chat-session-title { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .chat-session-meta { margin-top: 4px; font-size: 11px; color: inherit; opacity: .68; }
-    .chat-messages { padding: 20px; overflow: auto; display: flex; flex-direction: column; gap: 14px; background: linear-gradient(180deg, rgba(255,255,255,.32), rgba(250,247,241,.34)); }
+    .chat-messages { padding: 16px 18px; overflow: auto; display: flex; flex-direction: column; gap: 8px; background: linear-gradient(180deg, rgba(255,255,255,.32), rgba(250,247,241,.34)); }
     .chat-empty { margin: auto; text-align: center; color: var(--muted); max-width: 520px; line-height: 1.8; }
     .chat-empty strong { display: block; color: var(--text); font-size: 22px; margin-bottom: 8px; }
-    .msg { max-width: min(760px, 88%); border: 1px solid var(--line); border-radius: 22px; padding: 13px 15px; line-height: 1.72; white-space: pre-wrap; word-break: break-word; }
+    .msg { max-width: min(760px, 88%); border: 1px solid var(--line); border-radius: 18px; padding: 8px 12px; line-height: 1.48; white-space: pre-wrap; word-break: break-word; font-size: 14px; }
     .msg.user { align-self: flex-end; background: #24211d; color: #fffaf2; border-color: rgba(36,33,29,.1); }
     .msg.assistant { align-self: flex-start; background: rgba(255,253,249,.88); color: var(--text); }
-    .msg-meta { font-size: 11px; opacity: .58; margin-bottom: 5px; }
+    .msg-meta { font-size: 10px; opacity: .52; margin-bottom: 2px; line-height: 1.2; }
     .chat-composer { padding: 16px 20px 20px; border-top: 1px solid var(--line); background: rgba(255,255,255,.56); }
     .chat-composer textarea { min-height: 104px; max-height: 240px; }
     .chat-composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
-    .chat-status { min-height: 18px; color: var(--muted); font-size: 12px; }
+    .chat-status { min-height: 18px; color: var(--muted); font-size: 12px; display: inline-flex; align-items: center; gap: 7px; }
+    .thinking-dot { width: 13px; height: 13px; border-radius: 50%; border: 2px solid rgba(155,128,96,.24); border-top-color: #9b8060; display: inline-block; animation: spin .8s linear infinite; }
     .chat-status.error { color: var(--red); }
     .chat-status.ok { color: var(--green); }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -582,7 +583,7 @@
       chatMessages.innerHTML = messages.map((msg) => `
         <div class="msg ${msg.role === 'user' ? 'user' : 'assistant'}">
           <div class="msg-meta">${msg.role === 'user' ? '你' : escapeHtml(msg.model || 'AI')}</div>
-          <div>${escapeHtml(msg.content)}</div>
+          <div>${msg.html ? msg.content : escapeHtml(msg.content)}</div>
         </div>
       `).join('');
       chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -596,7 +597,7 @@
     function setChatSending(loading) {
       chatSending = loading;
       sendChatBtn.disabled = loading;
-      sendChatBtn.innerHTML = loading ? '<span class="spinner"></span>发送中...' : '发送';
+      sendChatBtn.textContent = '发送';
     }
 
     async function loadChatModels() {
@@ -627,6 +628,7 @@
       const model = chatModel.value || 'gpt-5.5';
       localStorage.setItem('dreamapi_chat_model', model);
       session.messages.push({ role: 'user', content, createdAt: Date.now() });
+      session.messages.push({ role: 'assistant', content: `<span class="thinking-dot" aria-hidden="true"></span> AI 正在回复...`, model, createdAt: Date.now(), pending: true, html: true });
       session.updatedAt = Date.now();
       updateChatTitle(session);
       chatInput.value = '';
@@ -634,7 +636,7 @@
       renderChatSessions();
       renderChatMessages();
       setChatSending(true);
-      setChatStatus(`正在请求 ${model}...`);
+      setChatStatus('');
       try {
         const resp = await fetch(CHAT_ENDPOINT, {
           method: 'POST',
@@ -643,11 +645,12 @@
             apiKey: $('apiKey').value.trim() || undefined,
             fingerprint: deviceFingerprint,
             model,
-            messages: session.messages.slice(-20).map(({ role, content }) => ({ role, content }))
+            messages: session.messages.filter((msg) => !msg.pending).slice(-20).map(({ role, content }) => ({ role, content }))
           })
         });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(data.error || '聊天请求失败');
+        session.messages = session.messages.filter((msg) => !msg.pending);
         session.messages.push({ role: 'assistant', content: data.reply || '', model: data.model || model, createdAt: Date.now() });
         session.updatedAt = Date.now();
         saveChatSessions();
@@ -656,6 +659,10 @@
         setChatStatus('已回复', 'ok');
         trackEvent('chat_success', { model, has_api_key: Boolean($('apiKey').value.trim()) });
       } catch (err) {
+          session.messages = session.messages.filter((msg) => !msg.pending);
+        saveChatSessions();
+        renderChatSessions();
+        renderChatMessages();
         setChatStatus(err.message || '聊天请求失败，请稍后重试。', 'error');
         trackEvent('chat_error', { model, message: String(err.message || '聊天失败').slice(0, 160) });
       } finally {
