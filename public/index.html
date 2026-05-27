@@ -188,17 +188,53 @@
     .sort-tabs button { padding: 10px 14px; font-size: 13px; box-shadow: none; background: rgba(36,33,29,.045); border: 1px solid var(--line); color: var(--muted); }
     .sort-tabs button.active { background: #24211d; color: #fffaf2; }
     .small-note { color: var(--muted); font-size: 13px; line-height: 1.6; }
+
+    .chat-card { padding: 0; min-height: 720px; overflow: hidden; display: grid; grid-template-columns: 280px minmax(0, 1fr); }
+    .chat-sidebar { border-right: 1px solid var(--line); padding: 18px; background: rgba(250,247,241,.52); }
+    .chat-main { display: grid; grid-template-rows: auto 1fr auto; min-height: 720px; }
+    .chat-top { padding: 18px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 14px; align-items: center; flex-wrap: wrap; }
+    .chat-title h2 { margin: 0; font-size: 20px; letter-spacing: -.35px; }
+    .chat-title p { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+    .chat-model { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .chat-model label { margin: 0; color: var(--muted); font-size: 12px; }
+    .chat-model select { min-width: 190px; border-radius: 999px; padding: 10px 13px; font-size: 13px; }
+    .chat-session-actions { display: grid; gap: 9px; margin-bottom: 14px; }
+    .chat-session-actions button { width: 100%; }
+    .chat-session-list { display: grid; gap: 8px; max-height: 590px; overflow: auto; padding-right: 2px; }
+    .chat-session { text-align: left; justify-content: flex-start; display: block; border-radius: 18px; padding: 12px; background: rgba(255,253,249,.7); color: var(--text); border: 1px solid var(--line); box-shadow: none; }
+    .chat-session.active { background: #24211d; color: #fffaf2; }
+    .chat-session-title { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chat-session-meta { margin-top: 4px; font-size: 11px; color: inherit; opacity: .68; }
+    .chat-messages { padding: 20px; overflow: auto; display: flex; flex-direction: column; gap: 14px; background: linear-gradient(180deg, rgba(255,255,255,.32), rgba(250,247,241,.34)); }
+    .chat-empty { margin: auto; text-align: center; color: var(--muted); max-width: 520px; line-height: 1.8; }
+    .chat-empty strong { display: block; color: var(--text); font-size: 22px; margin-bottom: 8px; }
+    .msg { max-width: min(760px, 88%); border: 1px solid var(--line); border-radius: 22px; padding: 13px 15px; line-height: 1.72; white-space: pre-wrap; word-break: break-word; }
+    .msg.user { align-self: flex-end; background: #24211d; color: #fffaf2; border-color: rgba(36,33,29,.1); }
+    .msg.assistant { align-self: flex-start; background: rgba(255,253,249,.88); color: var(--text); }
+    .msg-meta { font-size: 11px; opacity: .58; margin-bottom: 5px; }
+    .chat-composer { padding: 16px 20px 20px; border-top: 1px solid var(--line); background: rgba(255,255,255,.56); }
+    .chat-composer textarea { min-height: 104px; max-height: 240px; }
+    .chat-composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+    .chat-status { min-height: 18px; color: var(--muted); font-size: 12px; }
+    .chat-status.error { color: var(--red); }
+    .chat-status.ok { color: var(--green); }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (max-width: 980px) {
       .wrap { width: min(100% - 28px, 760px); padding-top: 22px; }
       .side-drawer { width: 100%; border-radius: 22px; }
-      .drawer-nav { display: grid; grid-template-columns: 1fr 1fr; }
+      .drawer-nav { display: grid; grid-template-columns: repeat(3, 1fr); }
       .hero { grid-template-columns: 1fr; }
       .form { position: static; }
       header { align-items: flex-start; flex-direction: column; }
       .promo-banner { border-radius: 24px; }
       .grid2 { grid-template-columns: 1fr; }
       .gallery-tools input { width: 100%; }
+
+      .chat-card { grid-template-columns: 1fr; }
+      .chat-sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+      .chat-session-list { max-height: 180px; }
+      .chat-main { min-height: 620px; }
+      .msg { max-width: 96%; }
     }
   </style>
 </head>
@@ -235,6 +271,7 @@
         <nav class="drawer-nav">
           <button type="button" class="active" data-view-tab="draw"><span class="nav-emoji">🎨</span><span>创作</span></button>
           <button type="button" data-view-tab="gallery"><span class="nav-emoji">🖼️</span><span>画廊</span></button>
+          <button type="button" data-view-tab="chat"><span class="nav-emoji">💬</span><span>聊一聊</span></button>
         </nav>
       </aside>
 
@@ -338,6 +375,40 @@
           </main>
         </section>
 
+
+
+        <section class="view-panel" data-view-panel="chat">
+          <section class="card chat-card" aria-label="聊一聊">
+            <aside class="chat-sidebar">
+              <div class="chat-session-actions">
+                <button id="newChatBtn" type="button">新会话</button>
+                <button id="clearChatsBtn" type="button" class="secondary">清空会话</button>
+              </div>
+              <div id="chatSessionList" class="chat-session-list"></div>
+            </aside>
+            <div class="chat-main">
+              <div class="chat-top">
+                <div class="chat-title">
+                  <h2>聊一聊</h2>
+                  <p>可以闲聊、写提示词、做创意方案；使用上方同一个 API Key，留空则走免费体验 Key。</p>
+                </div>
+                <div class="chat-model">
+                  <label for="chatModel">模型</label>
+                  <select id="chatModel"></select>
+                </div>
+              </div>
+              <div id="chatMessages" class="chat-messages"></div>
+              <div class="chat-composer">
+                <textarea id="chatInput" maxlength="8000" placeholder="输入你想聊的内容，例如：帮我构思一组适合小红书的产品图提示词"></textarea>
+                <div class="chat-composer-actions">
+                  <div id="chatStatus" class="chat-status"></div>
+                  <button id="sendChatBtn" type="button">发送</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </section>
+
         <section class="view-panel" data-view-panel="gallery">
           <section class="card inspire">
       <div class="inspire-head">
@@ -410,6 +481,14 @@
     const optimizePromptBtn = $('optimizePromptBtn');
     const restorePromptBtn = $('restorePromptBtn');
     const masterStatus = $('masterStatus');
+    const chatSessionList = $('chatSessionList');
+    const chatMessages = $('chatMessages');
+    const chatInput = $('chatInput');
+    const chatModel = $('chatModel');
+    const chatStatus = $('chatStatus');
+    const newChatBtn = $('newChatBtn');
+    const clearChatsBtn = $('clearChatsBtn');
+    const sendChatBtn = $('sendChatBtn');
     const viewTabs = Array.from(document.querySelectorAll('[data-view-tab]'));
     const viewPanels = Array.from(document.querySelectorAll('[data-view-panel]'));
 
@@ -418,6 +497,8 @@
     const PROMPT_OPTIMIZER_ENDPOINT = `${API_PREFIX}/optimize-prompt`;
     const GALLERY_ENDPOINT = `${API_PREFIX}/gallery`;
     const TRIAL_QUOTA_ENDPOINT = `${API_PREFIX}/trial-quota`;
+    const CHAT_MODELS_ENDPOINT = `${API_PREFIX}/chat/models`;
+    const CHAT_ENDPOINT = `${API_PREFIX}/chat/completions`;
     const clarityToOutputMode = { '720p': 'standard', '1k': '1k', '2k': '2k', '4k': '4k' };
     let galleryItems = [];
     let currentSort = 'hot';
@@ -428,6 +509,159 @@
     let deviceFingerprint = null;
     let referenceImages = [];
     let originalPromptBeforeOptimize = '';
+    let chatSessions = [];
+    let currentChatId = '';
+    let chatSending = false;
+
+
+
+    function defaultChatTitle() {
+      return '新会话';
+    }
+
+    function loadChatSessions() {
+      try {
+        chatSessions = JSON.parse(localStorage.getItem('dreamapi_chat_sessions') || '[]');
+      } catch {
+        chatSessions = [];
+      }
+      if (!Array.isArray(chatSessions) || !chatSessions.length) {
+        createChatSession(false);
+      } else {
+        currentChatId = localStorage.getItem('dreamapi_current_chat_id') || chatSessions[0].id;
+        if (!chatSessions.some((s) => s.id === currentChatId)) currentChatId = chatSessions[0].id;
+      }
+      renderChatSessions();
+      renderChatMessages();
+    }
+
+    function saveChatSessions() {
+      localStorage.setItem('dreamapi_chat_sessions', JSON.stringify(chatSessions.slice(0, 30)));
+      localStorage.setItem('dreamapi_current_chat_id', currentChatId || '');
+    }
+
+    function currentChat() {
+      return chatSessions.find((s) => s.id === currentChatId) || chatSessions[0];
+    }
+
+    function createChatSession(render = true) {
+      const session = { id: `chat_${Date.now()}_${Math.random().toString(16).slice(2)}`, title: defaultChatTitle(), createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
+      chatSessions.unshift(session);
+      currentChatId = session.id;
+      saveChatSessions();
+      if (render) {
+        renderChatSessions();
+        renderChatMessages();
+        chatInput.focus();
+      }
+      return session;
+    }
+
+    function updateChatTitle(session) {
+      if (!session || session.title !== defaultChatTitle()) return;
+      const firstUser = session.messages.find((m) => m.role === 'user')?.content || '';
+      if (firstUser) session.title = firstUser.replace(/\s+/g, ' ').slice(0, 22);
+    }
+
+    function renderChatSessions() {
+      chatSessionList.innerHTML = chatSessions.map((session) => `
+        <button type="button" class="chat-session ${session.id === currentChatId ? 'active' : ''}" data-chat-id="${escapeHtml(session.id)}">
+          <div class="chat-session-title">${escapeHtml(session.title || defaultChatTitle())}</div>
+          <div class="chat-session-meta">${session.messages?.length || 0} 条消息</div>
+        </button>
+      `).join('');
+    }
+
+    function renderChatMessages() {
+      const session = currentChat();
+      const messages = session?.messages || [];
+      if (!messages.length) {
+        chatMessages.innerHTML = '<div class="chat-empty"><strong>开始聊一聊</strong>选择模型后发送消息。这里可以帮你写提示词、拆创意、改文案，也可以正常对话。</div>';
+        return;
+      }
+      chatMessages.innerHTML = messages.map((msg) => `
+        <div class="msg ${msg.role === 'user' ? 'user' : 'assistant'}">
+          <div class="msg-meta">${msg.role === 'user' ? '你' : escapeHtml(msg.model || 'AI')}</div>
+          <div>${escapeHtml(msg.content)}</div>
+        </div>
+      `).join('');
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function setChatStatus(text, type = '') {
+      chatStatus.className = 'chat-status ' + type;
+      chatStatus.textContent = text;
+    }
+
+    function setChatSending(loading) {
+      chatSending = loading;
+      sendChatBtn.disabled = loading;
+      sendChatBtn.innerHTML = loading ? '<span class="spinner"></span>发送中...' : '发送';
+    }
+
+    async function loadChatModels() {
+      try {
+        const resp = await fetch(CHAT_MODELS_ENDPOINT);
+        const data = await resp.json().catch(() => ({}));
+        const models = Array.isArray(data.models) && data.models.length ? data.models : ['gpt-5.5'];
+        chatModel.innerHTML = models.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+        chatModel.value = localStorage.getItem('dreamapi_chat_model') || data.defaultModel || models[0];
+      } catch {
+        chatModel.innerHTML = '<option value="gpt-5.5">gpt-5.5</option>';
+      }
+    }
+
+    async function sendChatMessage() {
+      if (chatSending) return;
+      const content = chatInput.value.trim();
+      if (!content) {
+        setChatStatus('请输入聊天内容。', 'error');
+        chatInput.focus();
+        return;
+      }
+      if (!deviceFingerprint && !$('apiKey').value.trim()) {
+        setChatStatus('设备指纹加载中，请稍候再试。', 'error');
+        return;
+      }
+      let session = currentChat() || createChatSession(false);
+      const model = chatModel.value || 'gpt-5.5';
+      localStorage.setItem('dreamapi_chat_model', model);
+      session.messages.push({ role: 'user', content, createdAt: Date.now() });
+      session.updatedAt = Date.now();
+      updateChatTitle(session);
+      chatInput.value = '';
+      saveChatSessions();
+      renderChatSessions();
+      renderChatMessages();
+      setChatSending(true);
+      setChatStatus(`正在请求 ${model}...`);
+      try {
+        const resp = await fetch(CHAT_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiKey: $('apiKey').value.trim() || undefined,
+            fingerprint: deviceFingerprint,
+            model,
+            messages: session.messages.slice(-20).map(({ role, content }) => ({ role, content }))
+          })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || '聊天请求失败');
+        session.messages.push({ role: 'assistant', content: data.reply || '', model: data.model || model, createdAt: Date.now() });
+        session.updatedAt = Date.now();
+        saveChatSessions();
+        renderChatSessions();
+        renderChatMessages();
+        setChatStatus('已回复', 'ok');
+        trackEvent('chat_success', { model, has_api_key: Boolean($('apiKey').value.trim()) });
+      } catch (err) {
+        setChatStatus(err.message || '聊天请求失败，请稍后重试。', 'error');
+        trackEvent('chat_error', { model, message: String(err.message || '聊天失败').slice(0, 160) });
+      } finally {
+        setChatSending(false);
+      }
+    }
 
     function setMasterStatus(text, type = '') {
       masterStatus.className = 'master-status ' + type;
@@ -607,7 +841,8 @@
       viewTabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.viewTab === name));
       viewPanels.forEach((panel) => panel.classList.toggle('active', panel.dataset.viewPanel === name));
       if (name === 'gallery' && galleryItems.length === 0) loadGallery(currentSort);
-      window.history.replaceState(null, '', name === 'gallery' ? '#gallery' : '#draw');
+      if (name === 'chat') { renderChatSessions(); renderChatMessages(); }
+      window.history.replaceState(null, '', name === 'gallery' ? '#gallery' : (name === 'chat' ? '#chat' : '#draw'));
     }
 
     const savedKey = localStorage.getItem('dreamapi_image_key');
@@ -1007,8 +1242,10 @@
     }
 
     viewTabs.forEach((tab) => tab.addEventListener('click', () => switchView(tab.dataset.viewTab)));
-    window.addEventListener('hashchange', () => switchView(location.hash === '#gallery' ? 'gallery' : 'draw'));
-    switchView(location.hash === '#gallery' ? 'gallery' : 'draw');
+    window.addEventListener('hashchange', () => switchView(location.hash === '#gallery' ? 'gallery' : (location.hash === '#chat' ? 'chat' : 'draw')));
+    loadChatSessions();
+    loadChatModels();
+    switchView(location.hash === '#gallery' ? 'gallery' : (location.hash === '#chat' ? 'chat' : 'draw'));
 
     referenceInput.addEventListener('change', (ev) => handleReferenceFiles(ev.target.files));
     referencePreview.addEventListener('click', (ev) => {
@@ -1017,6 +1254,30 @@
       referenceImages.splice(Number(btn.dataset.refRemove), 1);
       renderReferencePreview();
     });
+
+
+    chatSessionList.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-chat-id]');
+      if (!btn) return;
+      currentChatId = btn.dataset.chatId;
+      saveChatSessions();
+      renderChatSessions();
+      renderChatMessages();
+    });
+    newChatBtn.onclick = () => createChatSession(true);
+    clearChatsBtn.onclick = () => {
+      if (!confirm('确定清空本机保存的所有聊天会话吗？')) return;
+      chatSessions = [];
+      createChatSession(false);
+      renderChatSessions();
+      renderChatMessages();
+      setChatStatus('会话已清空', 'ok');
+    };
+    sendChatBtn.onclick = sendChatMessage;
+    chatInput.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) sendChatMessage();
+    });
+    chatModel.addEventListener('change', () => localStorage.setItem('dreamapi_chat_model', chatModel.value));
 
     sortHot.onclick = () => loadGallery('hot');
     sortNew.onclick = () => loadGallery('new');

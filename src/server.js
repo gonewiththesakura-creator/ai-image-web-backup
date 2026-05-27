@@ -19,6 +19,11 @@ const PORT = Number(process.env.PORT || 3001);
 const API_BASE_URL = (process.env.SUB2API_BASE_URL || 'http://127.0.0.1:8080/v1').replace(/\/$/, '');
 const IMAGE_MODEL = process.env.IMAGE_MODEL || 'gpt-image-2';
 const PROMPT_OPTIMIZER_MODEL = process.env.PROMPT_OPTIMIZER_MODEL || 'gpt-5.5';
+const DEFAULT_CHAT_MODEL = process.env.DEFAULT_CHAT_MODEL || 'gpt-5.5';
+const CHAT_MODELS = (process.env.CHAT_MODELS || 'gpt-5.5,gpt-5.4,gpt-4o,claude-sonnet-4,o3-mini,astron-code-latest')
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean);
 const MAX_PROMPT_LENGTH = Number(process.env.MAX_PROMPT_LENGTH || 4000);
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 180000);
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
@@ -202,6 +207,14 @@ const promptOptimizerLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: '提示词优化请求太频繁，请稍后再试。' }
+});
+
+const chatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '聊天请求太频繁，请稍后再试。' }
 });
 
 const publishLimiter = rateLimit({
@@ -458,6 +471,26 @@ function normalizeOutputMode(value) {
   if (typeof value !== 'string') return 'standard';
   const normalized = value.trim().toLowerCase();
   return OUTPUT_MODES.has(normalized) ? normalized : 'standard';
+}
+
+function normalizeChatModel(value) {
+  const requested = String(value || '').trim();
+  if (requested && CHAT_MODELS.includes(requested)) return requested;
+  if (CHAT_MODELS.includes(DEFAULT_CHAT_MODEL)) return DEFAULT_CHAT_MODEL;
+  return CHAT_MODELS[0] || 'gpt-5.5';
+}
+
+function normalizeChatMessages(input) {
+  if (!Array.isArray(input)) return [];
+  return input.slice(-20).map((item) => {
+    const role = item?.role === 'assistant' ? 'assistant' : 'user';
+    const content = normalizePrompt(item?.content, 8000);
+    return content ? { role, content } : null;
+  }).filter(Boolean);
+}
+
+function cleanChatReply(text) {
+  return String(text || '').trim().slice(0, 20000);
 }
 
 function upscaleDimensions(size, mode) {
@@ -779,6 +812,75 @@ app.get('/api/trial-quota', (req, res) => {
   const state = getTrialRecord(fingerprint, ip);
   const message = state.remaining > 0 ? (state.reset ? '额度已重置' : '可继续体验') : '体验额度已用完';
   return res.json({ remaining: state.remaining, total: TRIAL_TOTAL, message });
+});
+
+
+app.get('/api/chat/models', (req, res) => {
+  res.json({ models: CHAT_MODELS, defaultModel: normalizeChatModel(DEFAULT_CHAT_MODEL) });
+});
+
+app.post('/api/chat/completions', chatLimiter, async (req, res) => {
+  try {
+    const apiKey = normalizeApiKey(req.body?.apiKey);
+    const fingerprint = String(req.body?.fingerprint || '').slice(0, 128);
+    const usingTrial = !apiKey;
+    if (usingTrial && !fingerprint) throw publicError(401, '请先输入 API Key 后使用聊一聊。');
+
+    const effectiveApiKey = usingTrial ? (process.env.TRIAL_API_KEY || '') : apiKey;
+    if (!effectiveApiKey) throw publicError(500, '聊天服务暂时不可用，请输入 API Key 使用。');
+
+    const model = normalizeChatModel(req.body?.model);
+    const userMessages = normalizeChatMessages(req.body?.messages);
+    if (!userMessages.length || userMessages[userMessages.length - 1].role !== 'user') {
+      throw publicError(400, '请输入要发送的聊天内容。');
+    }
+
+    const systemPrompt = normalizePrompt(req.body?.systemPrompt, 1200) || '你是 DreamAPI 的友好 AI 助手。用简洁、自然、实用的中文回答用户问题。可以帮助用户构思图片提示词、解释模型使用、提供创意建议，也可以正常闲聊。不要编造你无法确认的实时事实。';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Math.min(REQUEST_TIMEOUT_MS, 120000));
+    const upstreamResp = await fetch(`${API_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${effectiveApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...userMessages
+        ],
+        temperature: Number.isFinite(Number(req.body?.temperature)) ? Math.min(Math.max(Number(req.body.temperature), 0), 2) : 0.7,
+        max_tokens: Math.min(Math.max(Number(req.body?.maxTokens || 1800), 128), 8000),
+        stream: false
+      })
+    }).finally(() => clearTimeout(timeout));
+
+    const text = await upstreamResp.text();
+    let upstreamData = null;
+    try {
+      upstreamData = text ? JSON.parse(text) : null;
+    } catch {
+      upstreamData = null;
+    }
+
+    if (!upstreamResp.ok) {
+      const detail = upstreamData?.error?.message || upstreamData?.message || '聊天请求失败，请检查 API Key 或稍后重试。';
+      return res.status(upstreamResp.status === 401 ? 401 : 400).json({ error: detail });
+    }
+
+    const reply = cleanChatReply(upstreamData?.choices?.[0]?.message?.content || upstreamData?.choices?.[0]?.text || '');
+    if (!reply) throw publicError(502, '上游没有返回有效回复，请稍后重试。');
+    res.json({ reply, model, usage: upstreamData?.usage || null });
+  } catch (err) {
+    console.error('[chat] error:', { name: err?.name, message: err?.message, apiBaseUrl: API_BASE_URL });
+    if (err.name === 'AbortError') {
+      return res.status(504).json({ error: '聊天请求超时，请稍后重试。' });
+    }
+    const status = err.status || 500;
+    res.status(status).json({ error: status >= 500 ? '聊天服务错误，请稍后重试。' : err.message });
+  }
 });
 
 function buildPromptOptimizerMessages(userInput, options = {}) {
