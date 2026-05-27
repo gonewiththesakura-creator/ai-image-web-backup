@@ -120,6 +120,15 @@
     .ref-preview-item { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: #f2ece4; min-height: 76px; }
     .ref-preview-item img { width: 100%; height: 92px; object-fit: cover; display: block; }
     .ref-preview-item button { position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; padding: 0; border-radius: 999px; background: rgba(36,33,29,.72); border: 1px solid rgba(255,255,255,.4); box-shadow: none; }
+    .master-box { margin-top: 14px; padding: 15px; border: 1px solid rgba(155,128,96,.18); border-radius: 22px; background: linear-gradient(135deg, rgba(255,255,255,.72), rgba(250,247,241,.76)); }
+    .master-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+    .master-title { font-size: 13px; font-weight: 720; color: var(--text); display: flex; align-items: center; gap: 7px; }
+    .master-desc { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .master-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .master-actions button { padding: 10px 13px; font-size: 13px; }
+    .master-status { min-height: 18px; margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.55; white-space: pre-wrap; }
+    .master-status.error { color: var(--red); }
+    .master-status.ok { color: var(--green); }
     .quick-tips { display: none; }
     .status { min-height: 22px; margin-top: 16px; font-size: 14px; line-height: 1.65; white-space: pre-wrap; }
     .status.error { color: var(--red); }
@@ -238,6 +247,20 @@
 
         <label for="prompt">画面描述</label>
         <textarea id="prompt" maxlength="4000" placeholder="例如：一只陶瓷茶杯放在米色亚麻布上，清晨自然光，ins 风静物摄影，大面积留白，安静、克制、高级"></textarea>
+
+        <div class="master-box" aria-label="AI视觉生成大师">
+          <div class="master-head">
+            <div>
+              <div class="master-title"><span>✦</span><span>AI视觉生成大师</span></div>
+              <div class="master-desc">专注把作图需求优化成专业提示词；不会闲聊，只辅助创作。</div>
+            </div>
+          </div>
+          <div class="master-actions">
+            <button id="optimizePromptBtn" type="button" class="secondary">优化提示词</button>
+            <button id="restorePromptBtn" type="button" class="secondary" style="display: none;">还原原文</button>
+          </div>
+          <div id="masterStatus" class="master-status">输入简单需求后点击优化，可自动补全主体、镜头、光线、构图、材质与风格。</div>
+        </div>
 
         <div class="ref-box">
           <div class="ref-title"><span>参考图</span><span class="ref-mode" id="referenceModeText">未上传</span></div>
@@ -382,11 +405,15 @@
     const referenceInput = $('referenceImages');
     const referencePreview = $('referencePreview');
     const referenceModeText = $('referenceModeText');
+    const optimizePromptBtn = $('optimizePromptBtn');
+    const restorePromptBtn = $('restorePromptBtn');
+    const masterStatus = $('masterStatus');
     const viewTabs = Array.from(document.querySelectorAll('[data-view-tab]'));
     const viewPanels = Array.from(document.querySelectorAll('[data-view-panel]'));
 
     const API_PREFIX = location.pathname.startsWith('/draw') ? '/draw-api' : '/api';
     const API_ENDPOINT = `${API_PREFIX}/generate-image`;
+    const PROMPT_OPTIMIZER_ENDPOINT = `${API_PREFIX}/optimize-prompt`;
     const GALLERY_ENDPOINT = `${API_PREFIX}/gallery`;
     const TRIAL_QUOTA_ENDPOINT = `${API_PREFIX}/trial-quota`;
     const clarityToOutputMode = { '2k': '2k', '4k': '4k' };
@@ -398,6 +425,69 @@
     let lastGenerationSummary = null;
     let deviceFingerprint = null;
     let referenceImages = [];
+    let originalPromptBeforeOptimize = '';
+
+    function setMasterStatus(text, type = '') {
+      masterStatus.className = 'master-status ' + type;
+      masterStatus.textContent = text;
+    }
+
+    function setOptimizerLoading(loading) {
+      optimizePromptBtn.disabled = loading;
+      optimizePromptBtn.innerHTML = loading ? '<span class="spinner"></span>优化中...' : '优化提示词';
+    }
+
+    async function optimizePrompt() {
+      const apiKey = $('apiKey').value.trim();
+      const promptEl = $('prompt');
+      const prompt = promptEl.value.trim();
+      if (!prompt) {
+        setMasterStatus('请先输入一句作图需求。', 'error');
+        showToast('请先输入作图需求');
+        promptEl.focus();
+        return;
+      }
+      if (!apiKey && !deviceFingerprint) {
+        setMasterStatus('设备指纹加载中，请稍候再试。', 'error');
+        return;
+      }
+      originalPromptBeforeOptimize = prompt;
+      setOptimizerLoading(true);
+      setMasterStatus('AI视觉生成大师正在重写提示词...');
+      try {
+        const resp = await fetch(PROMPT_OPTIMIZER_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiKey: apiKey || undefined,
+            fingerprint: deviceFingerprint,
+            prompt,
+            size: $('sizePreset').value,
+            hasReferenceImages: referenceImages.length > 0
+          })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || '提示词优化失败');
+        if (!data.prompt) throw new Error('没有返回有效提示词');
+        promptEl.value = data.prompt;
+        restorePromptBtn.style.display = 'inline-flex';
+        setMasterStatus('已生成专业提示词，可直接开始生成，也可继续手动微调。', 'ok');
+        showToast('提示词已优化');
+        trackEvent('prompt_optimize_success', { has_api_key: Boolean(apiKey), reference_count: referenceImages.length });
+      } catch (err) {
+        setMasterStatus(err.message || '提示词优化失败，请稍后重试。', 'error');
+        trackEvent('prompt_optimize_error', { message: String(err.message || '提示词优化失败').slice(0, 160), has_api_key: Boolean(apiKey) });
+      } finally {
+        setOptimizerLoading(false);
+      }
+    }
+
+    function restoreOriginalPrompt() {
+      if (!originalPromptBeforeOptimize) return;
+      $('prompt').value = originalPromptBeforeOptimize;
+      restorePromptBtn.style.display = 'none';
+      setMasterStatus('已还原原始需求。', 'ok');
+    }
 
     // 初始化设备指纹
     let fingerprintLoadTimeout = null;
@@ -922,6 +1012,8 @@
 
     sortHot.onclick = () => loadGallery('hot');
     sortNew.onclick = () => loadGallery('new');
+    optimizePromptBtn.onclick = optimizePrompt;
+    restorePromptBtn.onclick = restoreOriginalPrompt;
     gallerySearch.addEventListener('input', () => renderGallery(galleryItems));
     modalClose.onclick = closeModal;
     modal.onclick = (ev) => { if (ev.target === modal) closeModal(); };
