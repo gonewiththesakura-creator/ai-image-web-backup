@@ -41,8 +41,8 @@ const FREE_DEFAULT_QUALITY = process.env.FREE_DEFAULT_QUALITY || 'low';
 
 const ALLOWED_SIZES = new Set([
   '1024x1024',
-  '1536x1024',
-  '1024x1536',
+  '1536x1152',
+  '1152x1536',
   '2048x2048',
   '2048x1152',
   '1152x2048',
@@ -54,8 +54,8 @@ const ALLOWED_SIZES = new Set([
 
 const SIZE_ALIASES = {
   '1:1': '1024x1024',
-  '3:2': '1536x1024',
-  '2:3': '1024x1536',
+  '4:3': '1536x1152',
+  '3:4': '1152x1536',
   '16:9': '2048x1152',
   '9:16': '1152x2048'
 };
