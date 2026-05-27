@@ -32,6 +32,9 @@ const UMAMI_DATABASE_URL = process.env.UMAMI_DATABASE_URL || '';
 const UMAMI_WEBSITE_ID = process.env.UMAMI_WEBSITE_ID || '595998a1-3596-4065-853e-6952ee26c957';
 const MAX_REFERENCE_IMAGES = 3;
 const MAX_REFERENCE_IMAGE_BYTES = 5 * 1024 * 1024;
+const REFERENCE_IMAGE_MAX_EDGE = Number(process.env.REFERENCE_IMAGE_MAX_EDGE || 1024);
+const REFERENCE_IMAGE_JPEG_QUALITY = Number(process.env.REFERENCE_IMAGE_JPEG_QUALITY || 78);
+const REFERENCE_IMAGE_TARGET_BYTES = Number(process.env.REFERENCE_IMAGE_TARGET_BYTES || 900 * 1024);
 const TRIAL_TOTAL = Number(process.env.TRIAL_TOTAL || 5);
 const TRIAL_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_FINGERPRINTS_PER_IP = Number(process.env.MAX_FINGERPRINTS_PER_IP || 20);
@@ -62,7 +65,7 @@ const SIZE_ALIASES = {
 };
 
 const ALLOWED_QUALITIES = new Set(['auto', 'low', 'medium', 'high']);
-const OUTPUT_MODES = new Set(['standard', '2k', '4k']);
+const OUTPUT_MODES = new Set(['standard', '1k', '2k', '4k']);
 const ALLOWED_FORMATS = new Set(['png', 'jpeg', 'webp']);
 const ALLOWED_SORTS = new Set(['hot', 'new']);
 const IMAGE_MIME_BY_FORMAT = {
@@ -480,6 +483,10 @@ function upscaleDimensions(size, mode) {
     return limitLongestEdge(2048);
   }
 
+  if (mode === '1k') {
+    return limitLongestEdge(1024);
+  }
+
   return size;
 }
 
@@ -512,15 +519,29 @@ async function normalizeReferenceImages(input) {
   const normalized = [];
   for (let i = 0; i < refs.length; i += 1) {
     try {
-      const buffer = await sharp(refs[i].buffer, { limitInputPixels: 36_000_000 })
-        .rotate()
-        .resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true })
-        .png({ compressionLevel: 8 })
-        .toBuffer();
-      if (buffer.length > MAX_REFERENCE_IMAGE_BYTES) {
+      let maxEdge = REFERENCE_IMAGE_MAX_EDGE;
+      let quality = REFERENCE_IMAGE_JPEG_QUALITY;
+      let buffer = null;
+
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        buffer = await sharp(refs[i].buffer, { limitInputPixels: 36_000_000 })
+          .rotate()
+          .resize({ width: maxEdge, height: maxEdge, fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality, mozjpeg: true, progressive: true })
+          .toBuffer();
+
+        if (buffer.length <= REFERENCE_IMAGE_TARGET_BYTES) break;
+        if (maxEdge > 768) {
+          maxEdge = Math.max(768, Math.round(maxEdge * 0.82));
+        } else {
+          quality = Math.max(62, quality - 8);
+        }
+      }
+
+      if (!buffer || buffer.length > MAX_REFERENCE_IMAGE_BYTES) {
         throw publicError(400, `第 ${i + 1} 张参考图压缩后仍然过大。`);
       }
-      normalized.push({ buffer, filename: `reference-${i + 1}.png`, type: 'image/png' });
+      normalized.push({ buffer, filename: `reference-${i + 1}.jpg`, type: 'image/jpeg' });
     } catch (err) {
       if (err.status) throw err;
       throw publicError(400, `第 ${i + 1} 张参考图处理失败，请换一张图片。`);

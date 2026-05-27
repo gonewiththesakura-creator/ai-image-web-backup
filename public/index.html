@@ -281,8 +281,10 @@
             </select>
           </div>
           <div>
-            <label for="clarity">质量</label>
+            <label for="clarity">清晰度</label>
             <select id="clarity">
+              <option value="720p" selected>720P（默认，成功率最高）</option>
+              <option value="1k">1K</option>
               <option value="2k">2K</option>
               <option value="4k">4K</option>
             </select>
@@ -416,7 +418,7 @@
     const PROMPT_OPTIMIZER_ENDPOINT = `${API_PREFIX}/optimize-prompt`;
     const GALLERY_ENDPOINT = `${API_PREFIX}/gallery`;
     const TRIAL_QUOTA_ENDPOINT = `${API_PREFIX}/trial-quota`;
-    const clarityToOutputMode = { '2k': '2k', '4k': '4k' };
+    const clarityToOutputMode = { '720p': 'standard', '1k': '1k', '2k': '2k', '4k': '4k' };
     let galleryItems = [];
     let currentSort = 'hot';
     let progressTimer = null;
@@ -546,14 +548,20 @@
         reader.onerror = () => reject(new Error('参考图读取失败'));
         reader.onload = () => {
           img.onload = () => {
-            const maxEdge = 1280;
+            const maxEdge = 1024;
             const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
             const canvas = document.createElement('canvas');
             canvas.width = Math.max(1, Math.round(img.width * scale));
             canvas.height = Math.max(1, Math.round(img.height * scale));
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            resolve(canvas.toDataURL('image/jpeg', 0.86));
+            const tryQualities = [0.78, 0.68, 0.58];
+            let compressed = '';
+            for (const quality of tryQualities) {
+              compressed = canvas.toDataURL('image/jpeg', quality);
+              if (compressed.length <= 1_250_000) break;
+            }
+            resolve(compressed);
           };
           img.onerror = () => reject(new Error('参考图解码失败'));
           img.src = reader.result;
@@ -708,7 +716,7 @@
     }
 
     function humanClarityLabel(value) {
-      return ({ '2k': '2K', '4k': '4K' })[value] || value;
+      return ({ '720p': '720P（默认）', '1k': '1K', '2k': '2K', '4k': '4K' })[value] || value;
     }
 
     function humanFormatLabel(value) {
@@ -1051,10 +1059,10 @@
 
       const usingTrial = !apiKey;
       const size = usingTrial ? '1024x1024' : (referenceImages.length ? '1024x1024' : $('sizePreset').value);
-      const clarity = usingTrial ? 'standard' : $('clarity').value;
+      const clarity = usingTrial ? '720p' : $('clarity').value;
       const format = usingTrial ? 'webp' : $('format').value;
       const batchMode = 'sequential';
-      const outputMode = usingTrial ? 'standard' : (referenceImages.length ? 'standard' : (clarityToOutputMode[clarity] || '2k'));
+      const outputMode = usingTrial ? 'standard' : (referenceImages.length ? 'standard' : (clarityToOutputMode[clarity] || 'standard'));
       const count = Number($('n').value) || 1;
       trackEvent('generate_click', {
         count,
@@ -1076,7 +1084,7 @@
       setResultMeta({
         prompt,
         size: referenceImages.length ? '参考图稳妥模式 · 1:1 方图' : humanSizeLabel(size),
-        clarity: usingTrial ? '免费体验标准模式' : humanClarityLabel(clarity),
+        clarity: usingTrial ? '免费体验 720P 默认模式' : humanClarityLabel(clarity),
         format: humanFormatLabel(format),
         batchMode: humanBatchModeLabel(batchMode),
         count: Number($('n').value) || 1,
