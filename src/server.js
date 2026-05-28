@@ -634,7 +634,7 @@ function parseReferenceImages(input) {
   });
 }
 
-async function normalizeReferenceImages(input) {
+export async function normalizeReferenceImages(input) {
   const refs = parseReferenceImages(input);
   const normalized = [];
   for (let i = 0; i < refs.length; i += 1) {

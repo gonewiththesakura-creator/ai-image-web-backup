@@ -3,6 +3,7 @@ import {
   classifyUpstreamHttpError,
   isRetriableUpstreamHttpError,
   normalizeCount,
+  normalizeReferenceImages,
   publicImageErrorMessage
 } from '../src/server.js';
 
@@ -25,5 +26,19 @@ assert.match(trialError, /体验额度已用完/, 'trial quota message should st
 
 const timeoutMessage = publicImageErrorMessage(504, 'upstream timeout');
 assert.match(timeoutMessage, /超时/, '504 should mention timeout');
+
+const tinyPng = `data:image/png;base64,${Buffer.from(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+    <rect width="24" height="24" fill="#f8d8b8"/>
+    <circle cx="12" cy="12" r="7" fill="#8b5cf6"/>
+  </svg>
+`).toString('base64')}`;
+const normalizedRefs = await normalizeReferenceImages([tinyPng]);
+assert.equal(normalizedRefs.length, 1, 'server should keep one normalized reference image');
+assert.equal(normalizedRefs[0].type, 'image/jpeg', 'server should convert reference images to JPEG before upstream submit');
+assert.equal(normalizedRefs[0].filename, 'reference-1.jpg', 'server should submit a .jpg filename upstream');
+assert.ok(Buffer.isBuffer(normalizedRefs[0].buffer), 'server should submit a binary buffer');
+assert.ok(normalizedRefs[0].buffer.length > 100, 'compressed reference buffer should not be empty');
+assert.ok(normalizedRefs[0].buffer.length <= 900 * 1024, 'server should keep small references within compression target');
 
 console.log('Unit checks passed.');
