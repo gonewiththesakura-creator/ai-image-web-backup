@@ -120,6 +120,8 @@
     .ref-preview-item { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: #f2ece4; min-height: 76px; }
     .ref-preview-item img { width: 100%; height: 92px; object-fit: cover; display: block; }
     .ref-preview-item button { position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; padding: 0; border-radius: 999px; background: rgba(36,33,29,.72); border: 1px solid rgba(255,255,255,.4); box-shadow: none; }
+    .ref-add-more { min-height: 92px; border: 1px dashed rgba(155,128,96,.36); border-radius: 16px; background: rgba(255,253,249,.56); color: var(--muted); display: grid; place-items: center; text-align: center; font-size: 12px; line-height: 1.5; cursor: pointer; box-shadow: none; padding: 8px; }
+    .ref-add-more strong { display: block; color: var(--text); font-size: 20px; line-height: 1; margin-bottom: 4px; }
     .master-box { margin-top: 14px; padding: 15px; border: 1px solid rgba(155,128,96,.18); border-radius: 22px; background: linear-gradient(135deg, rgba(255,255,255,.72), rgba(250,247,241,.76)); }
     .master-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
     .master-title { font-size: 13px; font-weight: 720; color: var(--text); display: flex; align-items: center; gap: 7px; }
@@ -306,7 +308,7 @@
         <div class="ref-box">
           <div class="ref-title"><span>参考图</span><span class="ref-mode" id="referenceModeText">未上传</span></div>
           <input id="referenceImages" type="file" accept="image/png,image/jpeg,image/webp" multiple />
-          <div class="hint">最多 3 张。参考图会自动压缩后提交；为提高成功率，参考图模式会使用稳妥尺寸生成。</div>
+          <div class="hint">最多 3 张。可以分多次添加，后续选择不会覆盖已添加的参考图；参考图会自动压缩后提交。</div>
           <div id="referencePreview" class="ref-preview"></div>
         </div>
 
@@ -820,30 +822,54 @@
 
     function renderReferencePreview() {
       referenceModeText.textContent = referenceImages.length ? `已启用 ${referenceImages.length}/3` : '未上传';
-      referencePreview.innerHTML = referenceImages.map((src, index) => `
+      const itemsHtml = referenceImages.map((src, index) => `
         <div class="ref-preview-item">
           <img src="${src}" alt="参考图 ${index + 1}" />
           <button type="button" data-ref-remove="${index}" title="移除参考图">×</button>
         </div>
       `).join('');
+      const addMoreHtml = referenceImages.length && referenceImages.length < 3 ? `
+        <button type="button" class="ref-add-more" data-ref-add title="继续添加参考图">
+          <span><strong>+</strong>继续添加<br />${3 - referenceImages.length} 个空位</span>
+        </button>
+      ` : '';
+      referencePreview.innerHTML = itemsHtml + addMoreHtml;
+    }
+
+    function mergeReferenceImages(newImages) {
+      const availableSlots = Math.max(0, 3 - referenceImages.length);
+      if (availableSlots <= 0) {
+        showToast('参考图最多 3 张，请先移除一张再添加');
+        return 0;
+      }
+      const imagesToAdd = newImages.slice(0, availableSlots);
+      referenceImages = referenceImages.concat(imagesToAdd);
+      if (newImages.length > availableSlots) showToast('最多只能上传 3 张参考图，超出的已自动忽略');
+      return imagesToAdd.length;
     }
 
     async function handleReferenceFiles(files) {
       const list = Array.from(files || []);
-      const picked = list.slice(0, 3);
-      if (list.length > 3) showToast('最多只能上传 3 张参考图，已自动取前 3 张');
+      if (!list.length) return;
+      const availableSlots = Math.max(0, 3 - referenceImages.length);
+      const picked = list.slice(0, availableSlots);
+      if (!picked.length) {
+        showToast('参考图最多 3 张，请先移除一张再添加');
+        referenceInput.value = '';
+        return;
+      }
       try {
-        referenceImages = [];
+        const compressedImages = [];
         for (const file of picked) {
-          referenceImages.push(await fileToCompressedDataUrl(file));
+          compressedImages.push(await fileToCompressedDataUrl(file));
         }
+        const addedCount = mergeReferenceImages(compressedImages);
         renderReferencePreview();
-        if (referenceImages.length) {
-          trackEvent('reference_image_used', { count: referenceImages.length });
-          showToast(`已添加 ${referenceImages.length} 张参考图`);
+        if (addedCount) {
+          trackEvent('reference_image_used', { count: referenceImages.length, added: addedCount });
+          showToast(`已添加 ${addedCount} 张参考图，共 ${referenceImages.length}/3 张`);
         }
       } catch (err) {
-        referenceImages = [];
         renderReferencePreview();
         showToast(err.message || '参考图处理失败');
       } finally {
@@ -1263,6 +1289,11 @@
 
     referenceInput.addEventListener('change', (ev) => handleReferenceFiles(ev.target.files));
     referencePreview.addEventListener('click', (ev) => {
+      const addBtn = ev.target.closest('[data-ref-add]');
+      if (addBtn) {
+        referenceInput.click();
+        return;
+      }
       const btn = ev.target.closest('[data-ref-remove]');
       if (!btn) return;
       referenceImages.splice(Number(btn.dataset.refRemove), 1);
