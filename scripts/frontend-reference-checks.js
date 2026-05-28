@@ -12,7 +12,7 @@ assert.match(html, /canvas\.toDataURL\('image\/jpeg', quality\)/, 'frontend shou
 assert.match(html, /const tryQualities = \[0\.78, 0\.68, 0\.58\]/, 'frontend should retry lower JPEG qualities when references are still large');
 assert.match(html, /compressedImages\.push\(await fileToCompressedDataUrl\(file\)\)/, 'frontend must submit compressed reference data URLs, not original FileReader output');
 assert.doesNotMatch(html, /referenceImages\.push\(reader\.result\)|referenceImages\s*=\s*referenceImages\.concat\(reader\.result\)/, 'frontend must not submit raw uncompressed FileReader data URLs');
-assert.match(html, /4K（最长边 4096px）/, 'frontend should explain 4K as 4096px longest edge');
+assert.match(html, /4K（最长边 3840px，约 2-5 分钟）/, 'frontend should explain 4K as 3840px longest edge and set latency expectation');
 assert.match(html, /2K（最长边 2048px）/, 'frontend should explain 2K as 2048px longest edge');
 assert.match(html, /1K（最长边 1024px）/, 'frontend should explain 1K as 1024px longest edge');
 assert.match(html, /720P（快速预览）/, 'frontend should avoid implying 720P is exact 720 pixels');
