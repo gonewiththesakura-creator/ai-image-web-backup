@@ -454,10 +454,8 @@ function pickAllowed(value, allowed, fallback) {
   return typeof value === 'string' && allowed.has(value) ? value : fallback;
 }
 
-function normalizeCount(value) {
-  const n = Number(value || 1);
-  if (!Number.isInteger(n)) return 1;
-  return Math.min(Math.max(n, 1), 4);
+export function normalizeCount(value) {
+  return 1;
 }
 
 function normalizeSize(value) {
@@ -533,7 +531,7 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function isTransientUpstreamFetchError(err) {
+export function isTransientUpstreamFetchError(err) {
   if (!err || err.name === 'AbortError') return false;
   const code = err.cause?.code || err.code || '';
   const message = String(err.message || err.cause?.message || '').toLowerCase();
@@ -548,11 +546,41 @@ function isTransientUpstreamFetchError(err) {
     || message.includes('stream error');
 }
 
+export function classifyUpstreamHttpError(status, data) {
+  const detail = data?.error?.message || data?.message || '图片生成失败，请检查 API Key 或修改提示词后重试。';
+  const normalized = String(detail || '').toLowerCase();
+  const retriable = status >= 500 && (
+    normalized.includes('stream error')
+    || normalized.includes('socket')
+    || normalized.includes('broken pipe')
+    || normalized.includes('internal_error')
+    || normalized.includes('upstream did not return image output')
+    || normalized.includes('fetch failed')
+    || normalized.includes('temporarily unavailable')
+  );
+  return { status, detail, retriable };
+}
+
+export function isRetriableUpstreamHttpError(errorInfo) {
+  return Boolean(errorInfo?.retriable);
+}
+
+export function publicImageErrorMessage(status, detail) {
+  const message = String(detail || '图片生成失败，请稍后重试。');
+  if (/体验额度|免费额度|fingerprint|试用/.test(message)) return message;
+  if (status === 401 || status === 403) return 'API Key 无效、余额不足或当前模型无权限，请检查 DreamApi 控制台。';
+  if (status === 504) return '图片生成超时，请稍后重试，或先使用标准清晰度/较少参考图。';
+  if (status === 400) return message;
+  if (status >= 500) return '上游图片服务暂时不稳定，请稍后重试。';
+  return message;
+}
+
 async function fetchUpstreamWithRetry(makeRequest, { attempts = 2, label = 'upstream' } = {}) {
   let lastErr;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    let response;
     try {
-      return await makeRequest(attempt);
+      response = await makeRequest(attempt);
     } catch (err) {
       lastErr = err;
       if (attempt >= attempts || !isTransientUpstreamFetchError(err)) throw err;
@@ -564,7 +592,26 @@ async function fetchUpstreamWithRetry(makeRequest, { attempts = 2, label = 'upst
         code: err?.cause?.code || err?.code
       });
       await delay(1200 * attempt);
+      continue;
     }
+
+    if (response.ok || attempt >= attempts) return response;
+
+    const bodyText = await response.clone().text().catch(() => '');
+    let bodyData = null;
+    try {
+      bodyData = bodyText ? JSON.parse(bodyText) : null;
+    } catch {
+      bodyData = bodyText ? { message: bodyText.slice(0, 500) } : null;
+    }
+    const errorInfo = classifyUpstreamHttpError(response.status, bodyData);
+    if (!isRetriableUpstreamHttpError(errorInfo)) return response;
+    console.warn(`[${label}] transient upstream HTTP error, retrying`, {
+      attempt,
+      status: response.status,
+      detail: errorInfo.detail
+    });
+    await delay(1200 * attempt);
   }
   throw lastErr;
 }
@@ -1107,8 +1154,9 @@ app.post('/api/generate-image', limiter, async (req, res) => {
     }
 
     if (!upstreamResp.ok) {
-      const detail = upstreamData?.error?.message || upstreamData?.message || '图片生成失败，请检查 API Key 或修改提示词后重试。';
-      return res.status(upstreamResp.status === 401 ? 401 : 400).json({ error: detail });
+      const { detail } = classifyUpstreamHttpError(upstreamResp.status, upstreamData);
+      const status = upstreamResp.status === 401 || upstreamResp.status === 403 ? upstreamResp.status : (upstreamResp.status >= 500 ? 502 : 400);
+      return res.status(status).json({ error: publicImageErrorMessage(status, detail) });
     }
 
     const images = [];
@@ -1137,10 +1185,10 @@ app.post('/api/generate-image', limiter, async (req, res) => {
       apiBaseUrl: API_BASE_URL
     });
     if (err.name === 'AbortError') {
-      return res.status(504).json({ error: '图片生成超时，请稍后重试。' });
+      return res.status(504).json({ error: publicImageErrorMessage(504, err.message) });
     }
     const status = err.status || 500;
-    res.status(status).json({ error: status >= 500 ? '服务器错误，请稍后重试。' : err.message });
+    res.status(status).json({ error: publicImageErrorMessage(status, err.message) });
   }
 });
 
@@ -1290,9 +1338,13 @@ app.use((req, res) => {
   res.status(404).sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`AI image web listening on 0.0.0.0:${PORT}`);
-  console.log(`Sub2API upstream: ${API_BASE_URL}`);
-  console.log(`Image model: ${IMAGE_MODEL}`);
-  console.log(`Gallery database: ${DB_PATH}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`AI image web listening on 0.0.0.0:${PORT}`);
+    console.log(`Sub2API upstream: ${API_BASE_URL}`);
+    console.log(`Image model: ${IMAGE_MODEL}`);
+    console.log(`Gallery database: ${DB_PATH}`);
+  });
+}
+
+export { app };

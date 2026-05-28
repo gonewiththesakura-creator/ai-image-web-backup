@@ -12,7 +12,7 @@ services:
       - SUB2API_BASE_URL=http://sub2api:8080/v1
       - IMAGE_MODEL=gpt-image-2
       - MAX_PROMPT_LENGTH=4000
-      - REQUEST_TIMEOUT_MS=300000
+      - REQUEST_TIMEOUT_MS=420000
       - DATA_DIR=/app/data
       - GALLERY_MAX_IMAGE_WIDTH=1280
       - GALLERY_MAX_IMAGE_HEIGHT=1280
