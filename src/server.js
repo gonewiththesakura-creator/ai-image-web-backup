@@ -69,6 +69,14 @@ const SIZE_ALIASES = {
   '9:16': '1152x2048'
 };
 
+const UPSCALED_SIZE_BY_MODE = {
+  '1024x1024': { '1k': '1024x1024', '2k': '2048x2048', '4k': '4096x4096' },
+  '1536x1152': { '1k': '1024x768', '2k': '2048x1536', '4k': '4096x3072' },
+  '1152x1536': { '1k': '768x1024', '2k': '1536x2048', '4k': '3072x4096' },
+  '2048x1152': { '1k': '1024x576', '2k': '2048x1152', '4k': '4096x2304' },
+  '1152x2048': { '1k': '576x1024', '2k': '1152x2048', '4k': '2304x4096' }
+};
+
 const ALLOWED_QUALITIES = new Set(['auto', 'low', 'medium', 'high']);
 const OUTPUT_MODES = new Set(['standard', '1k', '2k', '4k']);
 const ALLOWED_FORMATS = new Set(['png', 'jpeg', 'webp']);
@@ -493,32 +501,16 @@ function cleanChatReply(text) {
 
 function upscaleDimensions(size, mode) {
   if (!size || size === 'auto' || mode === 'standard') return size;
-  const parts = size.split('x').map((item) => Number(item));
-  if (parts.length !== 2 || parts.some((item) => !Number.isFinite(item) || item <= 0)) return size;
-  const [width, height] = parts;
+  return UPSCALED_SIZE_BY_MODE[size]?.[mode] || size;
+}
 
-  const limitLongestEdge = (targetLongestEdge) => {
-    const longest = Math.max(width, height);
-    if (longest <= targetLongestEdge) return `${width}x${height}`;
-    const ratio = targetLongestEdge / longest;
-    const scaledWidth = Math.max(1, Math.round(width * ratio));
-    const scaledHeight = Math.max(1, Math.round(height * ratio));
-    return `${scaledWidth}x${scaledHeight}`;
-  };
-
-  if (mode === '4k') {
-    return limitLongestEdge(3840);
-  }
-
-  if (mode === '2k') {
-    return limitLongestEdge(2048);
-  }
-
-  if (mode === '1k') {
-    return limitLongestEdge(1024);
-  }
-
-  return size;
+export function resolveImageRequestSettings({ size, outputMode, usingTrial = false, hasReferenceImages = false } = {}) {
+  const normalizedSize = normalizeSize(size);
+  const normalizedOutputMode = normalizeOutputMode(outputMode);
+  const finalSize = usingTrial
+    ? FREE_DEFAULT_SIZE
+    : (hasReferenceImages ? '1024x1024' : upscaleDimensions(normalizedSize, normalizedOutputMode));
+  return { size: normalizedSize, outputMode: normalizedOutputMode, finalSize };
 }
 
 function publicError(status, message) {
@@ -1071,15 +1063,21 @@ app.post('/api/generate-image', limiter, async (req, res) => {
 
     if (!rawPrompt) throw publicError(400, '请输入图片描述。');
 
-    const size = normalizeSize(req.body?.size);
     const hasReferenceImages = Array.isArray(req.body?.referenceImages) && req.body.referenceImages.length > 0;
     const referenceImages = await normalizeReferenceImages(req.body?.referenceImages);
     const usingTrial = !apiKey;
+    const requestSettings = resolveImageRequestSettings({
+      size: req.body?.size,
+      outputMode: req.body?.outputMode,
+      usingTrial,
+      hasReferenceImages
+    });
+    const size = requestSettings.size;
     const quality = usingTrial ? FREE_DEFAULT_QUALITY : (hasReferenceImages ? 'auto' : pickAllowed(req.body?.quality, ALLOWED_QUALITIES, 'auto'));
-    const outputMode = usingTrial ? FREE_DEFAULT_OUTPUT_MODE : (hasReferenceImages ? 'standard' : normalizeOutputMode(req.body?.outputMode));
+    const outputMode = usingTrial ? FREE_DEFAULT_OUTPUT_MODE : (hasReferenceImages ? 'standard' : requestSettings.outputMode);
     const output_format = usingTrial ? pickAllowed(FREE_DEFAULT_FORMAT, ALLOWED_FORMATS, 'webp') : pickAllowed(req.body?.format, ALLOWED_FORMATS, 'png');
     const n = normalizeCount(req.body?.n);
-    const finalSize = usingTrial ? FREE_DEFAULT_SIZE : (hasReferenceImages ? '1024x1024' : upscaleDimensions(size, outputMode));
+    const finalSize = requestSettings.finalSize;
 
     let trialReservation = null;
     if (usingTrial) {

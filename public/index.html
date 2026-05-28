@@ -326,10 +326,10 @@
           <div>
             <label for="clarity">清晰度</label>
             <select id="clarity">
-              <option value="720p" selected>720P（默认，成功率最高）</option>
-              <option value="1k">1K</option>
-              <option value="2k">2K</option>
-              <option value="4k">4K</option>
+              <option value="720p" selected>720P（快速预览）</option>
+              <option value="1k">1K（最长边 1024px）</option>
+              <option value="2k">2K（最长边 2048px）</option>
+              <option value="4k">4K（最长边 4096px）</option>
             </select>
           </div>
         </div>
@@ -991,7 +991,12 @@
     }
 
     function humanClarityLabel(value) {
-      return ({ '720p': '720P（默认）', '1k': '1K', '2k': '2K', '4k': '4K' })[value] || value;
+      return ({
+        '720p': '720P（快速预览）',
+        '1k': '1K（最长边 1024px）',
+        '2k': '2K（最长边 2048px）',
+        '4k': '4K（最长边 4096px）'
+      })[value] || value;
     }
 
     function humanFormatLabel(value) {
