@@ -190,7 +190,7 @@ app.use(helmet({
   }
 }));
 app.use(cors({ origin: false }));
-app.use(express.json({ limit: '20mb' }));
+app.use(express.json({ limit: '25mb' }));
 app.use((req, res, next) => {
   const startedAt = Date.now();
   res.on('finish', () => recordAccessLog(req, res, startedAt));
