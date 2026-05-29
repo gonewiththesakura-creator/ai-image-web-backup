@@ -46,6 +46,9 @@ assert.equal(resolveImageRequestSettings({ size: '1024x1024', outputMode: '720p'
 assert.equal(resolveImageRequestSettings({ size: '1024x1024', outputMode: '1k' }).finalSize, '1024x1024', '1K should request 1024 longest-edge 1:1 size');
 assert.equal(resolveImageRequestSettings({ size: '1024x1024', outputMode: '2k' }).finalSize, '2048x2048', '2K 1:1 should request 2048x2048 upstream');
 assert.equal(resolveImageRequestSettings({ size: '1024x1024', outputMode: '4k' }).finalSize, '3840x3840', '4K 1:1 should stay within upstream 3840 longest-edge limit');
+assert.equal(resolveImageRequestSettings({ size: '2048x1152', outputMode: '1k' }).finalSize, '1024x1024', '1K 16:9 should avoid upstream minimum-pixel-budget rejection');
+assert.equal(resolveImageRequestSettings({ size: '1152x2048', outputMode: '1k' }).finalSize, '1024x1024', '1K 9:16 should avoid upstream minimum-pixel-budget rejection');
+assert.equal(resolveImageRequestSettings({ size: '1536x1152', outputMode: '1k' }).finalSize, '1024x1024', '1K 4:3 should avoid upstream minimum-pixel-budget rejection');
 assert.equal(resolveImageRequestSettings({ size: '2048x1152', outputMode: '4k' }).finalSize, '3840x2160', '4K 16:9 should stay within upstream 3840 longest-edge limit');
 assert.equal(resolveImageRequestSettings({ size: '1152x2048', outputMode: '4k' }).finalSize, '2160x3840', '4K 9:16 should stay within upstream 3840 longest-edge limit');
 assert.equal(resolveImageRequestSettings({ size: '2048x1152', outputMode: '2k' }).finalSize, '2048x1152', '2K 16:9 should keep 2048 longest-edge upstream');
