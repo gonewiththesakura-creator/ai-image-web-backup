@@ -1494,7 +1494,7 @@
           renderImages(images);
           switchView('draw');
           mediaOutput.innerHTML = images[0] ? `<img src="${escapeHtml(imageSrc(images[0]))}" alt="媒体接口图片结果" />` : '';
-          setMediaStatus(`图片生成完成。cost=${data.cost ?? '上游未返回'}，usage=${data.usage ? JSON.stringify(data.usage) : '无'}`, 'ok');
+          setMediaStatus(data.message || `图片生成完成，已返回 ${images.length} 张图片。`, 'ok');
         }
       } catch (err) {
         setMediaStatus(err.message || '媒体接口调用失败。', 'error');

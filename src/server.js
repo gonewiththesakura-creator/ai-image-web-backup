@@ -670,6 +670,50 @@ function calculateMediaVideoPrice(model) {
   return { hold: roundMoney(item.hold), price: roundMoney(item.price) };
 }
 
+function normalizeMediaImageSizeForModel(model, size) {
+  const normalized = normalizeSize(size);
+  if (model !== 'dall-e-3') return normalized;
+  if (normalized === '1152x2048' || normalized === '1024x1792') return '1024x1792';
+  if (normalized === '2048x1152' || normalized === '1792x1024' || normalized === '1536x1152') return '1792x1024';
+  return '1024x1024';
+}
+
+function normalizeMediaImageQualityForModel(model, quality) {
+  const normalized = pickAllowed(quality, ALLOWED_QUALITIES, 'auto');
+  if (model === 'dall-e-3') return normalized === 'high' ? 'hd' : 'standard';
+  return normalized;
+}
+
+function extractMediaImages(data, outputFormat = 'png', prompt = '') {
+  const images = [];
+  for (const item of data?.data || []) {
+    if (typeof item?.url === 'string' && item.url) images.push({ type: 'url', url: item.url, prompt, format: outputFormat });
+    else if (typeof item?.b64_json === 'string' && item.b64_json) images.push({ type: 'base64', b64_json: item.b64_json, prompt, format: outputFormat });
+  }
+  return images;
+}
+
+function publicMediaErrorMessage(status, detail) {
+  const message = String(detail || '').replace(/\s+/g, ' ').trim();
+  const normalized = message.toLowerCase();
+  if (/size must be one of|invalid size|unsupported.*size|resolution/.test(normalized)) return '当前模型不支持所选尺寸，已按模型支持范围调整，请重新提交。';
+  if (/openai_error|upstream did not return image output|no image|没有返回图片/.test(normalized)) return '上游暂时没有返回可用结果，请稍后重试或换一个模型。';
+  if (/负载已饱和|rate limit|too many|overloaded|busy/.test(message)) return '当前上游繁忙，请稍后重试或换一个模型。';
+  if (status === 401 || status === 403) return 'API Key 无效、余额不足或当前套餐无权限，请检查 DreamApi 控制台。';
+  if (status === 402) return message || '余额不足，请充值后重试。';
+  if (status === 429) return '请求过于频繁，请稍后再试。';
+  if (status === 504) return '媒体生成超时，请稍后重试。';
+  if (status >= 500) return '媒体上游暂时不稳定，请稍后重试或换一个模型。';
+  return message.slice(0, 120) || '媒体接口调用失败，请稍后重试。';
+}
+
+function summarizeMediaImageSuccess(data = {}) {
+  const imageCount = Array.isArray(data.images) ? data.images.length : 0;
+  const charge = data.billing?.charged;
+  const chargeText = Number.isFinite(Number(charge)) ? `已扣费 ${Number(charge)} 点` : '已完成扣费';
+  return `图片生成完成，${chargeText}，已返回 ${imageCount} 张图片。`;
+}
+
 async function ensureMediaBalance(access, amount) {
   const value = roundMoney(amount);
   const res = await sub2apiPool.query('SELECT balance FROM users WHERE id = $1', [String(access.userId)]);
@@ -1396,9 +1440,9 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
     const prompt = normalizePrompt(req.body?.prompt);
     if (!prompt) throw publicError(400, '请输入图片描述。');
     const model = normalizeMediaModel(req.body?.model, 'image');
-    const size = normalizeSize(req.body?.size);
+    const size = normalizeMediaImageSizeForModel(model, req.body?.size);
     const output_format = pickAllowed(req.body?.format || req.body?.output_format, ALLOWED_FORMATS, 'png');
-    const quality = pickAllowed(req.body?.quality, ALLOWED_QUALITIES, 'auto');
+    const quality = normalizeMediaImageQualityForModel(model, req.body?.quality);
     const n = normalizeCount(req.body?.n);
     const salePrice = calculateMediaImagePrice(model, size, quality, n);
     await ensureMediaBalance(access, salePrice);
@@ -1417,13 +1461,11 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
     const data = parseJsonText(text);
     if (!upstreamResp.ok) {
       const detail = data?.error?.message || data?.message || '图片生成失败。';
-      return res.status(upstreamResp.status >= 500 ? 502 : upstreamResp.status).json({ error: detail, status: upstreamResp.status });
+      const publicStatus = upstreamResp.status >= 500 ? 502 : upstreamResp.status;
+      return res.status(publicStatus).json({ error: publicMediaErrorMessage(publicStatus, detail), status: upstreamResp.status });
     }
-    const images = [];
-    for (const item of data?.data || []) {
-      if (typeof item?.url === 'string' && item.url) images.push({ type: 'url', url: item.url, prompt, format: output_format });
-      else if (typeof item?.b64_json === 'string' && item.b64_json) images.push({ type: 'base64', b64_json: item.b64_json, prompt, format: output_format });
-    }
+    const images = extractMediaImages(data, output_format, prompt);
+    if (!images.length) return res.status(502).json({ error: publicMediaErrorMessage(502, data?.error?.message || data?.message || '上游没有返回图片。'), status: upstreamResp.status });
     const cost = extractTaskCost(data);
     const billing = await applyMediaBalanceEvent({
       access,
@@ -1441,6 +1483,7 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
       images,
       cost,
       billing: { charged: billing.amount, eventId: billing.eventId, usageLogId: billing.usageLogId },
+      message: summarizeMediaImageSuccess({ images, billing: { charged: billing.amount } }),
       usage: data?.usage || null,
       elapsedMs: Date.now() - startedAt,
       rawStatus: data?.status || null,
@@ -1448,9 +1491,9 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
     });
   } catch (err) {
     console.error('[media-image] error:', { name: err?.name, message: err?.message });
-    if (err.name === 'AbortError') return res.status(504).json({ error: '图片生成超时。' });
+    if (err.name === 'AbortError') return res.status(504).json({ error: publicMediaErrorMessage(504, err.message) });
     const status = err.status || 500;
-    res.status(status).json({ error: status >= 500 ? '媒体作图接口错误。' : err.message });
+    res.status(status).json({ error: publicMediaErrorMessage(status, status >= 500 ? '' : err.message) });
   }
 });
 
@@ -2024,5 +2067,10 @@ export {
   MEDIA_VIDEO_PRICING,
   calculateMediaImagePrice,
   calculateMediaVideoPrice,
-  normalizeMediaModel
+  normalizeMediaModel,
+  normalizeMediaImageSizeForModel,
+  normalizeMediaImageQualityForModel,
+  summarizeMediaImageSuccess,
+  publicMediaErrorMessage,
+  extractMediaImages
 };

@@ -4,6 +4,11 @@ import {
   isRetriableUpstreamHttpError,
   normalizeCount,
   normalizeMediaModel,
+  normalizeMediaImageSizeForModel,
+  normalizeMediaImageQualityForModel,
+  summarizeMediaImageSuccess,
+  publicMediaErrorMessage,
+  extractMediaImages,
   normalizeReferenceImages,
   publicImageErrorMessage,
   resolveImageRequestSettings,
@@ -104,5 +109,15 @@ assert.equal(calculateMediaImagePrice('grok-4.1-image', '1024x1024', 'low', 1), 
 assert.deepEqual(calculateMediaVideoPrice('wanx2.1-t2v-turbo'), { hold: 3, price: 3 }, 'wan turbo fixed price should stay at 3');
 assert.deepEqual(calculateMediaVideoPrice('sdols-2.0-fast'), { hold: 5, price: 5 }, 'sdols fast fixed price should stay at 5');
 assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-2-0-260128'), { hold: 10, price: 10 }, 'seedance 2 pro fixed price should stay at 10');
+
+assert.equal(normalizeMediaImageSizeForModel('dall-e-3', '2048x2048'), '1024x1024', 'dall-e-3 should never receive unsupported square 2K size');
+assert.equal(normalizeMediaImageSizeForModel('dall-e-3', '1152x2048'), '1024x1792', 'dall-e-3 portrait should map to supported portrait size');
+assert.equal(normalizeMediaImageSizeForModel('dall-e-3', '2048x1152'), '1792x1024', 'dall-e-3 landscape should map to supported landscape size');
+assert.equal(normalizeMediaImageQualityForModel('dall-e-3', 'low'), 'standard', 'dall-e-3 should use supported quality names');
+assert.equal(publicMediaErrorMessage(400, "size must be one of 1024x1024, 1024x1792 or 1792x1024 for dall-e-3"), '当前模型不支持所选尺寸，已按模型支持范围调整，请重新提交。', 'dall-e-3 size errors should be short and actionable');
+assert.equal(publicMediaErrorMessage(502, 'openai_error'), '上游暂时没有返回可用结果，请稍后重试或换一个模型。', 'openai_error should not leak raw provider code');
+assert.equal(publicMediaErrorMessage(502, '当前分组上游负载已饱和，请稍后再试：size must be one of 1024x1024, 1024x1792 or 1792x1024 for dall-e-3 (request id: abc)'), '当前模型不支持所选尺寸，已按模型支持范围调整，请重新提交。', 'mixed saturation and size detail should be classified as size error');
+assert.equal(summarizeMediaImageSuccess({ cost: null, billing: { charged: 0.3 }, images: [{}], usage: { total_tokens: 4190 } }), '图片生成完成，已扣费 0.3 点，已返回 1 张图片。', 'success summary should hide verbose usage JSON and upstream cost');
+assert.deepEqual(extractMediaImages({ data: [{ revised_prompt: 'only text' }], usage: { total_tokens: 12 } }, 'png', 'p'), [], 'text-only upstream responses must not be treated as successful images');
 
 console.log('Unit checks passed.');
