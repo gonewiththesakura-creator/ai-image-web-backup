@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "NODE_ENV=test node scripts/unit-checks.js && node scripts/frontend-reference-checks.js && node scripts/smoke-test.js",
-    "test:unit": "NODE_ENV=test node scripts/unit-checks.js && node scripts/frontend-reference-checks.js",
+    "test": "NODE_ENV=test node scripts/unit-checks.js && node scripts/frontend-reference-checks.js && node scripts/mobile-chat-layout-checks.js && node scripts/smoke-test.js",
+    "test:unit": "NODE_ENV=test node scripts/unit-checks.js && node scripts/frontend-reference-checks.js && node scripts/mobile-chat-layout-checks.js",
     "test:smoke": "node scripts/smoke-test.js",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js"

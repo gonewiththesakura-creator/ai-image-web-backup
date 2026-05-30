@@ -139,6 +139,24 @@ db.exec(`
     screen TEXT NOT NULL DEFAULT '',
     is_bot INTEGER NOT NULL DEFAULT 0
   );
+  CREATE TABLE IF NOT EXISTS media_tasks (
+    id TEXT PRIMARY KEY,
+    upstream_task_id TEXT NOT NULL,
+    provider TEXT NOT NULL DEFAULT 'compatible',
+    task_type TEXT NOT NULL,
+    model TEXT NOT NULL,
+    prompt TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'SUBMITTED',
+    cost REAL,
+    usage_json TEXT,
+    response_json TEXT,
+    output_url TEXT,
+    api_base_hash TEXT NOT NULL DEFAULT '',
+    api_key_hash TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    completed_at INTEGER
+  );
   CREATE INDEX IF NOT EXISTS idx_gallery_created ON gallery_items(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_gallery_hot ON gallery_items(likes DESC, views DESC, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_trial_fingerprint ON trial_usage(fingerprint);
@@ -149,6 +167,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_access_visitor ON access_logs(visitor_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_access_country ON access_logs(country);
   CREATE INDEX IF NOT EXISTS idx_access_timezone ON access_logs(timezone);
+  CREATE INDEX IF NOT EXISTS idx_media_tasks_created ON media_tasks(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_media_tasks_key ON media_tasks(api_key_hash, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_media_tasks_status ON media_tasks(status, updated_at DESC);
 `);
 
 const seedCount = db.prepare('SELECT COUNT(*) AS count FROM gallery_items').get().count;
@@ -453,6 +474,16 @@ function normalizeApiKey(value) {
   return value.trim();
 }
 
+function getRequestApiKey(req) {
+  const bodyKey = normalizeApiKey(req.body?.apiKey);
+  if (bodyKey) return bodyKey;
+  const headerKey = normalizeApiKey(req.headers['x-api-key']);
+  if (headerKey) return headerKey;
+  const auth = normalizeApiKey(req.headers.authorization || '');
+  const match = auth.match(/^Bearer\s+(.+)$/i);
+  return match ? normalizeApiKey(match[1]) : '';
+}
+
 function normalizePrompt(value, limit = MAX_PROMPT_LENGTH) {
   if (typeof value !== 'string') return '';
   return value.trim().slice(0, limit);
@@ -484,6 +515,91 @@ function normalizeChatModel(value) {
   if (requested && CHAT_MODELS.includes(requested)) return requested;
   if (CHAT_MODELS.includes(DEFAULT_CHAT_MODEL)) return DEFAULT_CHAT_MODEL;
   return CHAT_MODELS[0] || 'gpt-5.5';
+}
+
+const MEDIA_IMAGE_MODELS = [
+  { id: 'gpt-image-1', name: '高级作图', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 2.5, enabled: true, note: '已验证可通过媒体接口生成图片，适合复杂画面。' },
+  { id: 'gpt-image-2', name: '旗舰作图', type: 'image', tier: 'ultra', unit: '张', estimatedDreamPoints: 4.5, enabled: true, note: '旗舰图像档，速度可能更慢。' },
+  { id: 'gpt-image-1.5', name: '高级作图增强', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3.5, enabled: true, note: '增强图像档，适合更高质量测试。' }
+];
+
+const MEDIA_VIDEO_MODELS = [
+];
+
+const MEDIA_MODEL_MAP = new Map([...MEDIA_IMAGE_MODELS, ...MEDIA_VIDEO_MODELS].map((item) => [item.id, item]));
+const VIDEO_API_BASE_URL = (process.env.VIDEO_API_BASE_URL || API_BASE_URL.replace(/\/v1$/, '')).replace(/\/$/, '');
+
+function normalizeMediaModel(value, type) {
+  const requested = String(value || '').trim();
+  const item = MEDIA_MODEL_MAP.get(requested);
+  if (item && item.type === type && item.enabled) return item.id;
+  const fallback = type === 'video' ? MEDIA_VIDEO_MODELS[0] : MEDIA_IMAGE_MODELS[0];
+  return fallback.id;
+}
+
+function hashSecret(value) {
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 32);
+}
+
+function parseJsonText(text) {
+  try { return text ? JSON.parse(text) : null; } catch { return text ? { message: String(text).slice(0, 1000) } : null; }
+}
+
+function extractUpstreamTaskId(data) {
+  return data?.task_id || data?.id || data?.data?.task_id || data?.data?.id || data?.data?.taskId || data?.taskId || '';
+}
+
+function extractTaskStatus(data) {
+  return String(data?.status || data?.data?.status || data?.task_status || data?.state || 'UNKNOWN').toUpperCase();
+}
+
+function extractTaskCost(data) {
+  const candidates = [data?.cost, data?.data?.cost, data?.usage?.cost, data?.data?.usage?.cost, data?.billing?.cost];
+  for (const value of candidates) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function extractTaskOutputUrl(data) {
+  const candidates = [
+    data?.url, data?.video_url, data?.output_url, data?.data?.url, data?.data?.video_url, data?.data?.output_url,
+    data?.data?.video?.url, data?.data?.result?.url, data?.result?.url
+  ];
+  for (const value of candidates) {
+    if (typeof value === 'string' && /^https?:\/\//i.test(value)) return value;
+  }
+  const arrays = [data?.data?.output, data?.output, data?.data?.videos, data?.videos, data?.data?.result, data?.result];
+  for (const arr of arrays) {
+    const list = Array.isArray(arr) ? arr : [];
+    for (const item of list) {
+      const value = typeof item === 'string' ? item : (item?.url || item?.video_url || item?.output_url);
+      if (typeof value === 'string' && /^https?:\/\//i.test(value)) return value;
+    }
+  }
+  return '';
+}
+
+function isFinalTaskStatus(status) {
+  return ['SUCCESS', 'SUCCEEDED', 'COMPLETED', 'FAILURE', 'FAILED', 'CANCELED', 'CANCELLED'].includes(String(status || '').toUpperCase());
+}
+
+function publicTask(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    upstreamTaskId: row.upstream_task_id,
+    type: row.task_type,
+    model: row.model,
+    status: row.status,
+    cost: row.cost === null || row.cost === undefined ? null : Number(row.cost),
+    usage: row.usage_json ? parseJsonText(row.usage_json) : null,
+    outputUrl: row.output_url || '',
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString(),
+    completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null
+  };
 }
 
 function normalizeChatMessages(input) {
@@ -896,6 +1012,171 @@ app.get('/api/trial-quota', (req, res) => {
 
 app.get('/api/chat/models', (req, res) => {
   res.json({ models: CHAT_MODELS, defaultModel: normalizeChatModel(DEFAULT_CHAT_MODEL) });
+});
+
+
+app.get('/api/media/models', (req, res) => {
+  res.json({
+    ok: true,
+    policy: '客户侧仅展示 DreamApi 自有能力档位；实际消耗以接口返回 usage/cost 或异步任务最终状态为准。',
+    image: MEDIA_IMAGE_MODELS,
+    video: MEDIA_VIDEO_MODELS
+  });
+});
+
+app.post('/api/media/images/generations', limiter, async (req, res) => {
+  try {
+    const apiKey = getRequestApiKey(req);
+    if (!apiKey) throw publicError(401, '请输入 API Key 后再调用媒体作图接口。');
+    const prompt = normalizePrompt(req.body?.prompt);
+    if (!prompt) throw publicError(400, '请输入图片描述。');
+    const model = normalizeMediaModel(req.body?.model, 'image');
+    const size = normalizeSize(req.body?.size);
+    const output_format = pickAllowed(req.body?.format || req.body?.output_format, ALLOWED_FORMATS, 'png');
+    const quality = pickAllowed(req.body?.quality, ALLOWED_QUALITIES, 'auto');
+    const n = normalizeCount(req.body?.n);
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const upstreamResp = await fetch(`${API_BASE_URL}/images/generations`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, prompt, size, quality, output_format, n })
+    }).finally(() => clearTimeout(timeout));
+    const text = await upstreamResp.text();
+    const data = parseJsonText(text);
+    if (!upstreamResp.ok) {
+      const detail = data?.error?.message || data?.message || '图片生成失败。';
+      return res.status(upstreamResp.status >= 500 ? 502 : upstreamResp.status).json({ error: detail, status: upstreamResp.status });
+    }
+    const images = [];
+    for (const item of data?.data || []) {
+      if (typeof item?.url === 'string' && item.url) images.push({ type: 'url', url: item.url, prompt, format: output_format });
+      else if (typeof item?.b64_json === 'string' && item.b64_json) images.push({ type: 'base64', b64_json: item.b64_json, prompt, format: output_format });
+    }
+    const cost = extractTaskCost(data);
+    res.json({
+      ok: true,
+      type: 'image',
+      model,
+      images,
+      cost,
+      usage: data?.usage || null,
+      elapsedMs: Date.now() - startedAt,
+      rawStatus: data?.status || null
+    });
+  } catch (err) {
+    console.error('[media-image] error:', { name: err?.name, message: err?.message });
+    if (err.name === 'AbortError') return res.status(504).json({ error: '图片生成超时。' });
+    const status = err.status || 500;
+    res.status(status).json({ error: status >= 500 ? '媒体作图接口错误。' : err.message });
+  }
+});
+
+app.post('/api/media/videos/generations', limiter, async (req, res) => {
+  try {
+    const apiKey = getRequestApiKey(req);
+    if (!apiKey) throw publicError(401, '请输入 API Key 后再提交视频任务。');
+    const prompt = normalizePrompt(req.body?.prompt);
+    if (!prompt) throw publicError(400, '请输入视频描述。');
+    const model = normalizeMediaModel(req.body?.model, 'video');
+    const modelInfo = MEDIA_MODEL_MAP.get(model);
+    const duration = Number(req.body?.duration || modelInfo?.defaultDuration || 0);
+    const body = { model, prompt };
+    if (Number.isFinite(duration) && duration > 0 && !['wanx2.1-t2v-turbo', 'wan2.2-t2v-plus', 'grok-video-3'].includes(model)) body.duration = duration;
+    if (typeof req.body?.image_url === 'string' && req.body.image_url) body.image_url = req.body.image_url.slice(0, 2000);
+    if (typeof req.body?.aspect_ratio === 'string' && req.body.aspect_ratio) body.aspect_ratio = req.body.aspect_ratio.slice(0, 20);
+    if (typeof req.body?.size === 'string' && req.body.size) body.size = req.body.size.slice(0, 40);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Math.min(REQUEST_TIMEOUT_MS, 180000));
+    const upstreamResp = await fetch(`${VIDEO_API_BASE_URL}/v2/videos/generations`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).finally(() => clearTimeout(timeout));
+    const text = await upstreamResp.text();
+    const data = parseJsonText(text);
+    if (!upstreamResp.ok) {
+      const detail = data?.error?.message || data?.message || '视频任务提交失败。';
+      return res.status(upstreamResp.status >= 500 ? 502 : upstreamResp.status).json({ error: detail, status: upstreamResp.status, upstream: data });
+    }
+    const upstreamTaskId = extractUpstreamTaskId(data);
+    if (!upstreamTaskId) return res.status(502).json({ error: '上游未返回 task_id，无法跟踪任务。', upstream: data });
+    const now = Date.now();
+    const id = crypto.randomUUID();
+    const status = extractTaskStatus(data);
+    const cost = extractTaskCost(data);
+    const outputUrl = extractTaskOutputUrl(data);
+    db.prepare(`
+      INSERT INTO media_tasks (id, upstream_task_id, provider, task_type, model, prompt, status, cost, usage_json, response_json, output_url, api_base_hash, api_key_hash, created_at, updated_at, completed_at)
+      VALUES (?, ?, 'compatible', 'video', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, upstreamTaskId, model, prompt, status, cost, data?.usage ? JSON.stringify(data.usage) : null, JSON.stringify(data).slice(0, 20000), outputUrl, hashSecret(VIDEO_API_BASE_URL), hashSecret(apiKey), now, now, isFinalTaskStatus(status) ? now : null);
+    res.status(202).json({ ok: true, task: publicTask(db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(id)), upstream: data });
+  } catch (err) {
+    console.error('[media-video-submit] error:', { name: err?.name, message: err?.message });
+    if (err.name === 'AbortError') return res.status(504).json({ error: '视频任务提交超时。' });
+    const status = err.status || 500;
+    res.status(status).json({ error: status >= 500 ? '视频任务接口错误。' : err.message });
+  }
+});
+
+app.get('/api/media/tasks/:id', async (req, res) => {
+  try {
+    const apiKey = normalizeApiKey(req.query?.apiKey) || getRequestApiKey(req);
+    if (!apiKey) throw publicError(401, '请输入 API Key 后再查询任务。');
+    const id = String(req.params.id || '').slice(0, 120);
+    const row = db.prepare('SELECT * FROM media_tasks WHERE id = ? OR upstream_task_id = ?').get(id, id);
+    if (!row) throw publicError(404, '任务不存在。');
+    if (row.api_key_hash !== hashSecret(apiKey)) throw publicError(403, '该 API Key 无权查看此任务。');
+
+    let latest = null;
+    if (row.task_type === 'video' && !isFinalTaskStatus(row.status)) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 60000);
+      const upstreamResp = await fetch(`${VIDEO_API_BASE_URL}/v2/videos/generations/${encodeURIComponent(row.upstream_task_id)}`, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: { Authorization: `Bearer ${apiKey}` }
+      }).finally(() => clearTimeout(timeout));
+      const text = await upstreamResp.text();
+      latest = parseJsonText(text);
+      if (!upstreamResp.ok) {
+        return res.status(upstreamResp.status >= 500 ? 502 : upstreamResp.status).json({ error: latest?.error?.message || latest?.message || '任务查询失败。', task: publicTask(row), upstream: latest });
+      }
+      const status = extractTaskStatus(latest);
+      const cost = extractTaskCost(latest);
+      const outputUrl = extractTaskOutputUrl(latest);
+      const now = Date.now();
+      db.prepare(`
+        UPDATE media_tasks SET status = ?, cost = COALESCE(?, cost), usage_json = ?, response_json = ?, output_url = COALESCE(NULLIF(?, ''), output_url), updated_at = ?, completed_at = ?
+        WHERE id = ?
+      `).run(status, cost, latest?.usage ? JSON.stringify(latest.usage) : null, JSON.stringify(latest).slice(0, 20000), outputUrl, now, isFinalTaskStatus(status) ? now : row.completed_at, row.id);
+    }
+    const fresh = db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(row.id);
+    res.json({ ok: true, task: publicTask(fresh), finalCostPolicy: '视频任务以 SUCCESS/FAILURE 等最终状态里的 cost 为真实消耗；RUNNING 阶段 cost 只作参考。', upstream: latest });
+  } catch (err) {
+    console.error('[media-task] error:', { name: err?.name, message: err?.message });
+    if (err.name === 'AbortError') return res.status(504).json({ error: '任务查询超时。' });
+    const status = err.status || 500;
+    res.status(status).json({ error: status >= 500 ? '任务查询接口错误。' : err.message });
+  }
+});
+
+app.get('/api/media/tasks', (req, res) => {
+  try {
+    const apiKey = normalizeApiKey(req.query?.apiKey) || getRequestApiKey(req);
+    if (!apiKey) throw publicError(401, '请输入 API Key 后再查询任务列表。');
+    const limit = Math.min(Math.max(Number(req.query?.limit || 20), 1), 100);
+    const rows = db.prepare('SELECT * FROM media_tasks WHERE api_key_hash = ? ORDER BY created_at DESC LIMIT ?').all(hashSecret(apiKey), limit);
+    const totalCost = db.prepare('SELECT COALESCE(SUM(cost), 0) AS cost FROM media_tasks WHERE api_key_hash = ? AND completed_at IS NOT NULL').get(hashSecret(apiKey)).cost || 0;
+    res.json({ ok: true, tasks: rows.map(publicTask), summary: { totalTasks: rows.length, completedFinalCost: Number(totalCost) }, policy: '只汇总已完成任务的最终 cost；运行中预扣不计入最终消耗。' });
+  } catch (err) {
+    const status = err.status || 500;
+    res.status(status).json({ error: status >= 500 ? '任务列表接口错误。' : err.message });
+  }
 });
 
 app.post('/api/chat/completions', chatLimiter, async (req, res) => {

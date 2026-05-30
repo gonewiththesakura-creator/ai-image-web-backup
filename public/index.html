@@ -191,6 +191,30 @@
     .sort-tabs button.active { background: #24211d; color: #fffaf2; }
     .small-note { color: var(--muted); font-size: 13px; line-height: 1.6; }
 
+    .media-card { padding: 26px; }
+    .media-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
+    .media-head h2 { margin: 0; font-size: 20px; letter-spacing: -.35px; }
+    .media-head p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .media-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .media-tabs button { background: rgba(36,33,29,.045); border: 1px solid var(--line); color: var(--muted); box-shadow: none; }
+    .media-tabs button.active { background: #24211d; color: #fffaf2; }
+    .media-grid { display: grid; grid-template-columns: minmax(320px, 420px) minmax(0, 1fr); gap: 18px; align-items: start; }
+    .media-box { border: 1px solid var(--line); border-radius: 24px; background: rgba(255,253,249,.70); padding: 16px; }
+    .media-model-list { display: grid; gap: 10px; max-height: 360px; overflow: auto; padding-right: 3px; }
+    .model-option { width: 100%; display: block; text-align: left; border: 1px solid var(--line); background: rgba(250,247,241,.72); color: var(--text); border-radius: 18px; padding: 12px; box-shadow: none; }
+    .model-option.active { background: #24211d; color: #fffaf2; }
+    .model-option strong { display: block; font-size: 14px; margin-bottom: 4px; }
+    .model-option span { display: block; font-size: 12px; opacity: .72; line-height: 1.5; }
+    .media-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+    .media-status { min-height: 22px; margin-top: 12px; color: var(--muted); font-size: 13px; line-height: 1.65; white-space: pre-wrap; }
+    .media-status.error { color: var(--red); }
+    .media-status.ok { color: var(--green); }
+    .task-list { display: grid; gap: 10px; }
+    .task-item { border: 1px solid var(--line); border-radius: 18px; padding: 12px; background: rgba(255,255,255,.58); color: var(--text); }
+    .task-item strong { display: block; font-size: 13px; margin-bottom: 5px; }
+    .task-item pre { margin: 8px 0 0; white-space: pre-wrap; word-break: break-all; font-size: 11px; color: var(--muted); }
+    .media-output { margin-top: 12px; }
+    .media-output img, .media-output video { width: 100%; border-radius: 18px; border: 1px solid var(--line); background: #eee6dc; }
     .chat-card { padding: 0; min-height: 560px; max-height: min(760px, calc(100vh - 190px)); overflow: hidden; display: grid; grid-template-columns: 260px minmax(0, 1fr); }
     .chat-sidebar { border-right: 1px solid var(--line); padding: 16px; background: rgba(250,247,241,.52); }
     .chat-main { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 560px; max-height: min(760px, calc(100vh - 190px)); }
@@ -236,11 +260,26 @@
       .grid2 { grid-template-columns: 1fr; }
       .gallery-tools input { width: 100%; }
 
-      .chat-card { grid-template-columns: 1fr; }
-      .chat-sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
-      .chat-session-list { max-height: 180px; }
-      .chat-main { min-height: 560px; max-height: none; }
-      .msg { max-width: 96%; }
+      .media-grid { grid-template-columns: 1fr; }
+      .chat-card { grid-template-columns: 1fr; max-height: none; overflow: visible; }
+      .chat-sidebar { border-right: 0; border-bottom: 1px solid var(--line); padding: 12px; }
+      .chat-session-actions { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+      .chat-session-list { max-height: 86px; }
+      .chat-session { padding: 10px 12px; }
+      .chat-main { min-height: auto; max-height: none; }
+      .chat-top { padding: 14px 16px; }
+      .chat-title p { display: none; }
+      .chat-model { width: 100%; align-items: center; }
+      .chat-model select { flex: 1; min-width: 0; }
+      .chat-messages { min-height: 120px; max-height: none; overflow: visible; padding: 12px 14px; }
+      .chat-empty { margin: 0; line-height: 1.55; }
+      .chat-empty strong { font-size: 18px; margin-bottom: 4px; }
+      .chat-composer { padding: 12px 14px 14px; }
+      .chat-composer textarea { min-height: 118px; }
+      .chat-composer-actions { align-items: stretch; }
+      .chat-composer-actions button { width: 100%; }
+      .msg-wrap { max-width: 96%; }
+      .msg { max-width: 100%; }
     }
   </style>
 </head>
@@ -278,6 +317,7 @@
           <button type="button" class="active" data-view-tab="draw"><span class="nav-emoji">🎨</span><span>创作</span></button>
           <button type="button" data-view-tab="gallery"><span class="nav-emoji">🖼️</span><span>画廊</span></button>
           <button type="button" data-view-tab="chat"><span class="nav-emoji">💬</span><span>聊一聊</span></button>
+          <button type="button" data-view-tab="media"><span class="nav-emoji">🎬</span><span>媒体 API</span></button>
         </nav>
       </aside>
 
@@ -415,6 +455,59 @@
           </section>
         </section>
 
+        <section class="view-panel" data-view-panel="media">
+          <section class="card media-card" aria-label="媒体 API">
+            <div class="media-head">
+              <div>
+                <h2>媒体 API 测试台</h2>
+                <p>输入 DreamApi / 兼容 API Key，可提交图片生成和视频任务；视频任务会记录 task_id、状态与最终 cost。</p>
+              </div>
+              <div class="pill">Images + Video Tasks</div>
+            </div>
+            <div class="media-tabs">
+              <button id="mediaImageTab" type="button" class="active">图片接口</button>
+              <button id="mediaVideoTab" type="button">视频任务</button>
+              <button id="refreshTasksBtn" type="button" class="secondary">刷新任务</button>
+            </div>
+            <div class="media-grid">
+              <div class="media-box">
+                <label for="mediaPrompt">媒体描述</label>
+                <textarea id="mediaPrompt" maxlength="4000" placeholder="例如：一只白色猫咪在雨夜霓虹街头奔跑，电影感，浅景深"></textarea>
+                <div class="grid2">
+                  <div>
+                    <label for="mediaDuration">视频时长</label>
+                    <select id="mediaDuration">
+                      <option value="5">5 秒</option>
+                      <option value="6">6 秒</option>
+                      <option value="10">10 秒</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="mediaAspect">画幅</label>
+                    <select id="mediaAspect">
+                      <option value="16:9">16:9</option>
+                      <option value="9:16">9:16</option>
+                      <option value="1:1">1:1</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="media-actions">
+                  <button id="submitMediaBtn" type="button">提交媒体任务</button>
+                  <button id="copyApiExampleBtn" type="button" class="secondary">复制接口示例</button>
+                </div>
+                <div id="mediaStatus" class="media-status"></div>
+                <div id="mediaOutput" class="media-output"></div>
+              </div>
+              <div class="media-box">
+                <h3 style="margin:0 0 12px;font-size:16px;">能力档位</h3>
+                <div id="mediaModelList" class="media-model-list"></div>
+                <h3 style="margin:18px 0 12px;font-size:16px;">任务与消耗</h3>
+                <div id="mediaTaskList" class="task-list"></div>
+              </div>
+            </div>
+          </section>
+        </section>
+
         <section class="view-panel" data-view-panel="gallery">
           <section class="card inspire">
       <div class="inspire-head">
@@ -495,6 +588,18 @@
     const newChatBtn = $('newChatBtn');
     const clearChatsBtn = $('clearChatsBtn');
     const sendChatBtn = $('sendChatBtn');
+    const mediaImageTab = $('mediaImageTab');
+    const mediaVideoTab = $('mediaVideoTab');
+    const refreshTasksBtn = $('refreshTasksBtn');
+    const mediaPrompt = $('mediaPrompt');
+    const mediaDuration = $('mediaDuration');
+    const mediaAspect = $('mediaAspect');
+    const submitMediaBtn = $('submitMediaBtn');
+    const copyApiExampleBtn = $('copyApiExampleBtn');
+    const mediaStatus = $('mediaStatus');
+    const mediaOutput = $('mediaOutput');
+    const mediaModelList = $('mediaModelList');
+    const mediaTaskList = $('mediaTaskList');
     const viewTabs = Array.from(document.querySelectorAll('[data-view-tab]'));
     const viewPanels = Array.from(document.querySelectorAll('[data-view-panel]'));
 
@@ -505,6 +610,10 @@
     const TRIAL_QUOTA_ENDPOINT = `${API_PREFIX}/trial-quota`;
     const CHAT_MODELS_ENDPOINT = `${API_PREFIX}/chat/models`;
     const CHAT_ENDPOINT = `${API_PREFIX}/chat/completions`;
+    const MEDIA_MODELS_ENDPOINT = `${API_PREFIX}/media/models`;
+    const MEDIA_IMAGE_ENDPOINT = `${API_PREFIX}/media/images/generations`;
+    const MEDIA_VIDEO_ENDPOINT = `${API_PREFIX}/media/videos/generations`;
+    const MEDIA_TASKS_ENDPOINT = `${API_PREFIX}/media/tasks`;
     const clarityToOutputMode = { '720p': 'standard', '1k': '1k', '2k': '2k', '4k': '4k' };
     let galleryItems = [];
     let currentSort = 'hot';
@@ -518,8 +627,9 @@
     let chatSessions = [];
     let currentChatId = '';
     let chatSending = false;
-
-
+    let mediaMode = 'image';
+    let mediaModels = { image: [], video: [] };
+    let selectedMediaModel = '';
 
     function defaultChatTitle() {
       return '新会话';
@@ -882,7 +992,8 @@
       viewPanels.forEach((panel) => panel.classList.toggle('active', panel.dataset.viewPanel === name));
       if (name === 'gallery' && galleryItems.length === 0) loadGallery(currentSort);
       if (name === 'chat') { renderChatSessions(); renderChatMessages(); }
-      window.history.replaceState(null, '', name === 'gallery' ? '#gallery' : (name === 'chat' ? '#chat' : '#draw'));
+      if (name === 'media') { loadMediaModels(); refreshMediaTasks(); }
+      window.history.replaceState(null, '', name === 'gallery' ? '#gallery' : (name === 'chat' ? '#chat' : (name === 'media' ? '#media' : '#draw')));
     }
 
     const savedKey = localStorage.getItem('dreamapi_image_key');
@@ -1289,11 +1400,134 @@
       }
     }
 
+
+    function setMediaStatus(text, type = '') {
+      mediaStatus.className = 'media-status ' + type;
+      mediaStatus.textContent = text;
+    }
+
+    function activeMediaModels() {
+      return mediaMode === 'video' ? (mediaModels.video || []) : (mediaModels.image || []);
+    }
+
+    function renderMediaModels() {
+      const models = activeMediaModels();
+      if (!selectedMediaModel || !models.some((m) => m.id === selectedMediaModel)) selectedMediaModel = models[0]?.id || '';
+      mediaImageTab.classList.toggle('active', mediaMode === 'image');
+      mediaVideoTab.classList.toggle('active', mediaMode === 'video');
+      mediaDuration.closest('div').style.display = mediaMode === 'video' ? 'block' : 'none';
+      mediaAspect.closest('div').style.display = mediaMode === 'video' ? 'block' : 'none';
+      submitMediaBtn.textContent = mediaMode === 'video' ? '提交视频任务' : '提交图片生成';
+      mediaModelList.innerHTML = models.map((m) => `
+        <button type="button" class="model-option ${m.id === selectedMediaModel ? 'active' : ''}" data-media-model="${escapeHtml(m.id)}">
+          <strong>${escapeHtml(m.name)} · ${escapeHtml(m.estimatedDreamPoints)} 点/${escapeHtml(m.unit)}</strong>
+          <span>${escapeHtml(m.id)}</span>
+          <span>${escapeHtml(m.note || '')}</span>
+        </button>
+      `).join('') || '<div class="small-note">暂无可用模型。</div>';
+    }
+
+    async function loadMediaModels() {
+      if (mediaModels.image.length || mediaModels.video.length) { renderMediaModels(); return; }
+      try {
+        const resp = await fetch(MEDIA_MODELS_ENDPOINT);
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || '能力列表加载失败');
+        mediaModels = { image: data.image || [], video: data.video || [] };
+        renderMediaModels();
+      } catch (err) {
+        mediaModelList.innerHTML = `<div class="small-note">${escapeHtml(err.message || '能力列表加载失败')}</div>`;
+      }
+    }
+
+    async function submitMediaTask() {
+      const apiKey = $('apiKey').value.trim();
+      const prompt = mediaPrompt.value.trim() || $('prompt').value.trim();
+      if (!apiKey) { setMediaStatus('请先在顶部 API Key 输入框填入 DreamApi / 兼容 API Key。', 'error'); return; }
+      if (!prompt) { setMediaStatus('请输入媒体描述。', 'error'); mediaPrompt.focus(); return; }
+      if (!selectedMediaModel) { setMediaStatus('请选择一个能力档位。', 'error'); return; }
+      localStorage.setItem('dreamapi_image_key', apiKey);
+      submitMediaBtn.disabled = true;
+      setMediaStatus(mediaMode === 'video' ? '正在提交视频任务...' : '正在调用图片生成接口...');
+      mediaOutput.innerHTML = '';
+      try {
+        const endpoint = mediaMode === 'video' ? MEDIA_VIDEO_ENDPOINT : MEDIA_IMAGE_ENDPOINT;
+        const payload = mediaMode === 'video'
+          ? { apiKey, model: selectedMediaModel, prompt, duration: Number(mediaDuration.value), aspect_ratio: mediaAspect.value }
+          : { apiKey, model: selectedMediaModel, prompt, size: $('sizePreset').value, format: $('format').value, quality: $('clarity').value === '720p' ? 'low' : 'auto', n: 1 };
+        const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || '接口调用失败');
+        if (mediaMode === 'video') {
+          const task = data.task || {};
+          setMediaStatus(`视频任务已提交：${task.id || task.upstreamTaskId}
+状态：${task.status}
+请等待最终 SUCCESS/FAILURE 后查看真实 cost。`, 'ok');
+          await refreshMediaTasks();
+        } else {
+          const images = data.images || [];
+          renderImages(images);
+          switchView('draw');
+          mediaOutput.innerHTML = images[0] ? `<img src="${escapeHtml(imageSrc(images[0]))}" alt="媒体接口图片结果" />` : '';
+          setMediaStatus(`图片生成完成。cost=${data.cost ?? '上游未返回'}，usage=${data.usage ? JSON.stringify(data.usage) : '无'}`, 'ok');
+        }
+      } catch (err) {
+        setMediaStatus(err.message || '媒体接口调用失败。', 'error');
+      } finally {
+        submitMediaBtn.disabled = false;
+      }
+    }
+
+    async function refreshMediaTasks() {
+      const apiKey = $('apiKey').value.trim();
+      if (!apiKey) { mediaTaskList.innerHTML = '<div class="small-note">输入 API Key 后显示最近任务。</div>'; return; }
+      try {
+        const resp = await fetch(`${MEDIA_TASKS_ENDPOINT}?limit=20&apiKey=${encodeURIComponent(apiKey)}`);
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || '任务列表加载失败');
+        const tasks = data.tasks || [];
+        mediaTaskList.innerHTML = tasks.map((task) => `
+          <div class="task-item">
+            <strong>${escapeHtml(task.model)} · ${escapeHtml(task.status)} · cost ${task.cost ?? '未最终结算'}</strong>
+            ${task.outputUrl ? `<a href="${escapeHtml(task.outputUrl)}" target="_blank" rel="noreferrer">打开结果</a>` : ''}
+            <pre>${escapeHtml(task.id)}
+${escapeHtml(task.upstreamTaskId)}
+${escapeHtml(task.updatedAt)}</pre>
+          </div>
+        `).join('') || '<div class="small-note">暂无任务记录。</div>';
+      } catch (err) {
+        mediaTaskList.innerHTML = `<div class="small-note">${escapeHtml(err.message || '任务加载失败')}</div>`;
+      }
+    }
+
+    function copyApiExample() {
+      const apiKey = $('apiKey').value.trim() || 'YOUR_API_KEY';
+      const prompt = mediaPrompt.value.trim() || '一只白色猫咪在雨夜霓虹街头奔跑，电影感';
+      const endpoint = mediaMode === 'video' ? '/api/media/videos/generations' : '/api/media/images/generations';
+      const payload = mediaMode === 'video'
+        ? { apiKey, model: selectedMediaModel || 'doubao-seedance-1-0-pro-fast-251015', prompt, duration: Number(mediaDuration.value), aspect_ratio: mediaAspect.value }
+        : { apiKey, model: selectedMediaModel || 'doubao-seedream-4-0-250828', prompt, size: $('sizePreset').value, format: $('format').value, n: 1 };
+      const text = `curl -X POST ${location.origin}${endpoint} -H 'Content-Type: application/json' -d '${JSON.stringify(payload).replace(/'/g, "'\''")}'`;
+      navigator.clipboard?.writeText(text).then(() => setMediaStatus('接口示例已复制。', 'ok')).catch(() => setMediaStatus(text));
+    }
+
+    mediaImageTab.onclick = () => { mediaMode = 'image'; selectedMediaModel = ''; renderMediaModels(); };
+    mediaVideoTab.onclick = () => { mediaMode = 'video'; selectedMediaModel = ''; renderMediaModels(); };
+    mediaModelList.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-media-model]');
+      if (!btn) return;
+      selectedMediaModel = btn.dataset.mediaModel;
+      renderMediaModels();
+    });
+    submitMediaBtn.onclick = submitMediaTask;
+    refreshTasksBtn.onclick = refreshMediaTasks;
+    copyApiExampleBtn.onclick = copyApiExample;
+
     viewTabs.forEach((tab) => tab.addEventListener('click', () => switchView(tab.dataset.viewTab)));
-    window.addEventListener('hashchange', () => switchView(location.hash === '#gallery' ? 'gallery' : (location.hash === '#chat' ? 'chat' : 'draw')));
+    window.addEventListener('hashchange', () => switchView(location.hash === '#gallery' ? 'gallery' : (location.hash === '#chat' ? 'chat' : (location.hash === '#media' ? 'media' : 'draw'))));
     loadChatSessions();
     loadChatModels();
-    switchView(location.hash === '#gallery' ? 'gallery' : (location.hash === '#chat' ? 'chat' : 'draw'));
+    switchView(location.hash === '#gallery' ? 'gallery' : (location.hash === '#chat' ? 'chat' : (location.hash === '#media' ? 'media' : 'draw')));
 
     referenceInput.addEventListener('change', (ev) => handleReferenceFiles(ev.target.files));
     referencePreview.addEventListener('click', (ev) => {

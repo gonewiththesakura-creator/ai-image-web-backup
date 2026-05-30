@@ -16,5 +16,6 @@ assert.match(html, /4K（最长边 3840px，约 2-5 分钟）/, 'frontend should
 assert.match(html, /2K（最长边 2048px）/, 'frontend should explain 2K as 2048px longest edge');
 assert.match(html, /1K（最长边 1024px）/, 'frontend should explain 1K as 1024px longest edge');
 assert.match(html, /720P（快速预览）/, 'frontend should avoid implying 720P is exact 720 pixels');
+assert.doesNotMatch(html, /src=\"scripts\/mobile-chat-layout-checks\.js\"/, 'mobile chat layout check script should not be loaded by the public page');
 
 console.log('Frontend reference-image checks passed.');
