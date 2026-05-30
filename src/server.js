@@ -157,6 +157,23 @@ db.exec(`
     updated_at INTEGER NOT NULL,
     completed_at INTEGER
   );
+  CREATE TABLE IF NOT EXISTS media_billing_events (
+    id TEXT PRIMARY KEY,
+    task_id TEXT,
+    event_type TEXT NOT NULL,
+    task_type TEXT NOT NULL,
+    model TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    api_key_id TEXT NOT NULL,
+    amount REAL NOT NULL,
+    upstream_cost REAL,
+    status TEXT NOT NULL DEFAULT 'APPLIED',
+    usage_log_id TEXT,
+    billing_entry_id TEXT,
+    metadata_json TEXT,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (task_id) REFERENCES media_tasks(id) ON DELETE SET NULL
+  );
   CREATE INDEX IF NOT EXISTS idx_gallery_created ON gallery_items(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_gallery_hot ON gallery_items(likes DESC, views DESC, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_trial_fingerprint ON trial_usage(fingerprint);
@@ -170,7 +187,27 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_media_tasks_created ON media_tasks(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_media_tasks_key ON media_tasks(api_key_hash, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_media_tasks_status ON media_tasks(status, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_media_billing_task ON media_billing_events(task_id, event_type);
+  CREATE INDEX IF NOT EXISTS idx_media_billing_user ON media_billing_events(user_id, created_at DESC);
 `);
+
+for (const [tableName, columns] of Object.entries({
+  media_tasks: [
+    ['user_id', 'TEXT'],
+    ['api_key_id', 'TEXT'],
+    ['sale_price', 'REAL'],
+    ['hold_amount', 'REAL'],
+    ['billing_status', "TEXT NOT NULL DEFAULT 'UNBILLED'"],
+    ['billing_event_id', 'TEXT'],
+    ['settled_at', 'INTEGER'],
+    ['refunded_at', 'INTEGER']
+  ]
+})) {
+  const existing = new Set(db.prepare(`PRAGMA table_info(${tableName})`).all().map((row) => row.name));
+  for (const [column, definition] of columns) {
+    if (!existing.has(column)) db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${column} ${definition}`);
+  }
+}
 
 const seedCount = db.prepare('SELECT COUNT(*) AS count FROM gallery_items').get().count;
 if (seedCount === 0) {
@@ -540,6 +577,36 @@ const MEDIA_VIDEO_MODELS = [
 ];
 
 const MEDIA_MODEL_MAP = new Map([...MEDIA_IMAGE_MODELS, ...MEDIA_VIDEO_MODELS].map((item) => [item.id, item]));
+const MEDIA_IMAGE_PRICING = {
+  'gpt-image-1': { base: 0.60 },
+  'gpt-image-1.5': { base: 0.90 },
+  'gpt-image-2': { base: 1.20 },
+  'dall-e-3': { base: 0.45 },
+  'qwen-image': { base: 0.40 },
+  'nano-banana': { base: 0.45 },
+  'nano-banana-pro': { base: 0.90 },
+  'flux-dev': { base: 0.35 },
+  'flux-pro': { base: 0.80 },
+  'grok-4.1-image': { base: 1.20 }
+};
+const MEDIA_SIZE_MULTIPLIERS = {
+  '1024x1024': 1,
+  '1536x1152': 1.35,
+  '1152x1536': 1.35,
+  '2048x1152': 1.7,
+  '1152x2048': 1.7,
+  '2048x2048': 2.2,
+  auto: 1
+};
+const MEDIA_QUALITY_MULTIPLIERS = { low: 0.75, medium: 1, auto: 1, high: 1.6 };
+const MEDIA_VIDEO_PRICING = {
+  'wanx2.1-t2v-turbo': { hold: 3.00, price: 3.00 },
+  'wan2.2-t2v-plus': { hold: 8.00, price: 8.00 },
+  'MiniMax-Hailuo-02': { hold: 6.00, price: 6.00 },
+  'sora-2': { hold: 20.00, price: 20.00 },
+  'veo3.1-fast': { hold: 12.00, price: 12.00 },
+  'grok-video-3': { hold: 8.00, price: 8.00 }
+};
 const VIDEO_API_BASE_URL = (process.env.VIDEO_API_BASE_URL || API_BASE_URL.replace(/\/v1$/, '')).replace(/\/$/, '');
 const MEDIA_REQUIRE_9999 = String(process.env.MEDIA_REQUIRE_9999 || '1') !== '0';
 const SUB2API_DATABASE_URL = process.env.SUB2API_DATABASE_URL || 'postgresql://sub2api:sub2api@sub2api-postgres:5432/sub2api';
@@ -554,6 +621,144 @@ function normalizeMediaModel(value, type) {
   const fallback = type === 'video' ? MEDIA_VIDEO_MODELS[0] : MEDIA_IMAGE_MODELS[0];
   if (!fallback) throw publicError(503, `暂未开放${type === 'video' ? '视频' : '图片'}媒体模型。`);
   return fallback.id;
+}
+
+function roundMoney(value) {
+  return Math.round((Number(value) || 0) * 100000000) / 100000000;
+}
+
+function calculateMediaImagePrice(model, size, quality, n = 1) {
+  const base = MEDIA_IMAGE_PRICING[model]?.base ?? 1;
+  const sizeMultiplier = MEDIA_SIZE_MULTIPLIERS[size] ?? 1;
+  const qualityMultiplier = MEDIA_QUALITY_MULTIPLIERS[quality] ?? 1;
+  return roundMoney(base * sizeMultiplier * qualityMultiplier * Math.max(1, Number(n) || 1));
+}
+
+function calculateMediaVideoPrice(model) {
+  const item = MEDIA_VIDEO_PRICING[model] || { hold: 10, price: 10 };
+  return { hold: roundMoney(item.hold), price: roundMoney(item.price) };
+}
+
+async function ensureMediaBalance(access, amount) {
+  const value = roundMoney(amount);
+  const res = await sub2apiPool.query('SELECT balance FROM users WHERE id = $1', [String(access.userId)]);
+  if (!res.rowCount) throw publicError(404, '用户不存在，无法扣费。');
+  const balance = Number(res.rows[0].balance || 0);
+  if (balance + 1e-9 < value) throw publicError(402, `余额不足，当前余额 ${balance.toFixed(4)}，本次需要 ${value.toFixed(4)}。`);
+  return balance;
+}
+
+function normalizeBillingImageSize(size) {
+  const raw = String(size || '').toLowerCase();
+  if (/3840|2160|4k/.test(raw)) return '4K';
+  if (/2048|1536|2k/.test(raw)) return '2K';
+  return '1K';
+}
+
+async function applyMediaBalanceEvent({ access, eventType, taskType, model, amount, upstreamCost = null, taskId = null, metadata = {}, credit = false }) {
+  const value = roundMoney(amount);
+  if (!Number.isFinite(value) || value <= 0) throw publicError(400, '无效媒体扣费金额。');
+  const userId = String(access.userId);
+  const apiKeyId = String(access.keyId);
+  const now = Date.now();
+  const eventId = crypto.randomUUID();
+  const client = await sub2apiPool.connect();
+  try {
+    await client.query('BEGIN');
+    const userRes = await client.query('SELECT balance FROM users WHERE id = $1 FOR UPDATE', [userId]);
+    if (!userRes.rowCount) throw publicError(404, '用户不存在，无法扣费。');
+    const balance = Number(userRes.rows[0].balance || 0);
+    if (!credit && balance + 1e-9 < value) throw publicError(402, `余额不足，当前余额 ${balance.toFixed(4)}，本次需要 ${value.toFixed(4)}。`);
+    const reqId = `media-${eventType}-${eventId}`.slice(0, 120);
+    const signedAmount = credit ? -value : value;
+    const actualCost = credit ? 0 : (upstreamCost === null ? value : Number(upstreamCost || 0));
+    const usageRes = await client.query(`
+      INSERT INTO usage_logs (
+        user_id, api_key_id, account_id, request_id, model,
+        input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+        cache_creation_5m_tokens, cache_creation_1h_tokens,
+        input_cost, output_cost, cache_creation_cost, cache_read_cost,
+        total_cost, actual_cost, stream, duration_ms, created_at,
+        group_id, rate_multiplier, first_token_ms, billing_type,
+        user_agent, image_count, image_size, account_rate_multiplier,
+        reasoning_effort, cache_ttl_overridden, openai_ws_mode, request_type,
+        service_tier, inbound_endpoint, upstream_endpoint, upstream_model, requested_model,
+        channel_id, model_mapping_chain, billing_tier, billing_mode,
+        image_output_tokens, image_output_cost, account_stats_cost,
+        image_input_size, image_output_size, image_size_source, image_size_breakdown
+      ) VALUES (
+        $1,$2,51,$3,$4,
+        0,0,0,0,
+        0,0,
+        0,0,0,0,
+        $5,$6,false,0,now(),
+        $7,1,0,0,
+        'ai-image-web-media', $8, $9, 1,
+        NULL,false,false,$10,
+        'media','/api/media/' || $11, $12, $4, $4,
+        NULL,NULL,'media','fixed',
+        0,0,$13,
+        NULL,$9,'output',NULL
+      ) RETURNING id
+    `, [
+      userId, apiKeyId, reqId, model,
+      signedAmount, actualCost, access.groupId,
+      taskType === 'image' ? 1 : 0, taskType === 'image' ? normalizeBillingImageSize(metadata.size) : null, taskType === 'image' ? 1 : 2,
+      taskType, taskType === 'video' ? '/v2/videos/generations' : '/v1/images/generations', upstreamCost
+    ]);
+    const usageLogId = usageRes.rows[0].id;
+    const billRes = await client.query(`
+      INSERT INTO billing_usage_entries (usage_log_id, user_id, api_key_id, subscription_id, billing_type, applied, delta_usd, created_at)
+      VALUES ($1,$2,$3,NULL,0,true,$4,now()) RETURNING id
+    `, [usageLogId, userId, apiKeyId, credit ? value : -value]);
+    await client.query(`UPDATE users SET balance = balance ${credit ? '+' : '-'} $1, updated_at = now() WHERE id = $2`, [value, userId]);
+    await client.query(`UPDATE api_keys SET quota_used = GREATEST(0, COALESCE(quota_used,0) ${credit ? '-' : '+'} $1), updated_at = now() WHERE id = $2`, [value, apiKeyId]);
+    await client.query('COMMIT');
+    db.prepare(`
+      INSERT INTO media_billing_events (id, task_id, event_type, task_type, model, user_id, api_key_id, amount, upstream_cost, status, usage_log_id, billing_entry_id, metadata_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'APPLIED', ?, ?, ?, ?)
+    `).run(eventId, taskId, eventType, taskType, model, userId, apiKeyId, value, upstreamCost, String(usageLogId), String(billRes.rows[0].id), JSON.stringify(metadata).slice(0, 4000), now);
+    return { eventId, usageLogId: String(usageLogId), billingEntryId: String(billRes.rows[0].id), amount: value };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function settleVideoBilling(row, latest = null) {
+  if (!row || row.task_type !== 'video' || !isFinalTaskStatus(row.status) || row.billing_status !== 'PENDING') return null;
+  const access = { userId: row.user_id, keyId: row.api_key_id, groupId: 17 };
+  const upstreamCost = extractTaskCost(latest) ?? row.cost;
+  if (row.status === 'SUCCESS') {
+    if (hasMediaBillingEvent(row.id, 'video_charge')) return null;
+    const amount = roundMoney(row.sale_price || calculateMediaVideoPrice(row.model).price);
+    const billing = await applyMediaBalanceEvent({
+      access,
+      eventType: 'video_charge',
+      taskType: 'video',
+      model: row.model,
+      amount,
+      upstreamCost,
+      taskId: row.id,
+      metadata: { upstreamTaskId: row.upstream_task_id, status: row.status }
+    });
+    db.prepare('UPDATE media_tasks SET billing_status = ?, billing_event_id = ?, settled_at = ?, updated_at = ? WHERE id = ?')
+      .run('CHARGED', billing.eventId, Date.now(), Date.now(), row.id);
+    return billing;
+  }
+  if (['FAILURE', 'CANCELED'].includes(row.status)) {
+    db.prepare('UPDATE media_tasks SET billing_status = ?, refunded_at = ?, updated_at = ? WHERE id = ?')
+      .run('REFUNDED', Date.now(), Date.now(), row.id);
+    return { amount: 0, status: 'REFUNDED_NO_CHARGE' };
+  }
+  return null;
+}
+
+function hasMediaBillingEvent(taskId, eventType) {
+  if (!taskId) return false;
+  return Boolean(db.prepare('SELECT 1 FROM media_billing_events WHERE task_id = ? AND event_type = ? LIMIT 1').get(taskId, eventType));
 }
 
 function hashSecret(value) {
@@ -695,7 +900,10 @@ function publicTask(row) {
     outputUrl: row.output_url || '',
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
-    completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null
+    completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
+    salePrice: row.sale_price === null || row.sale_price === undefined ? null : Number(row.sale_price),
+    holdAmount: row.hold_amount === null || row.hold_amount === undefined ? null : Number(row.hold_amount),
+    billingStatus: row.billing_status || 'UNBILLED'
   };
 }
 
@@ -1142,6 +1350,7 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
     const output_format = pickAllowed(req.body?.format || req.body?.output_format, ALLOWED_FORMATS, 'png');
     const quality = pickAllowed(req.body?.quality, ALLOWED_QUALITIES, 'auto');
     const n = normalizeCount(req.body?.n);
+    const salePrice = calculateMediaImagePrice(model, size, quality, n);
     const startedAt = Date.now();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -1165,12 +1374,22 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
       else if (typeof item?.b64_json === 'string' && item.b64_json) images.push({ type: 'base64', b64_json: item.b64_json, prompt, format: output_format });
     }
     const cost = extractTaskCost(data);
+    const billing = await applyMediaBalanceEvent({
+      access,
+      eventType: 'image_charge',
+      taskType: 'image',
+      model,
+      amount: salePrice,
+      upstreamCost: cost,
+      metadata: { size, quality, n, output_format, promptHash: hashSecret(prompt) }
+    });
     res.json({
       ok: true,
       type: 'image',
       model,
       images,
       cost,
+      billing: { charged: billing.amount, eventId: billing.eventId, usageLogId: billing.usageLogId },
       usage: data?.usage || null,
       elapsedMs: Date.now() - startedAt,
       rawStatus: data?.status || null,
@@ -1198,6 +1417,8 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
     if (typeof req.body?.image_url === 'string' && req.body.image_url) body.image_url = req.body.image_url.slice(0, 2000);
     if (typeof req.body?.aspect_ratio === 'string' && req.body.aspect_ratio) body.aspect_ratio = req.body.aspect_ratio.slice(0, 20);
     if (typeof req.body?.size === 'string' && req.body.size) body.size = req.body.size.slice(0, 40);
+    const pricing = calculateMediaVideoPrice(model);
+    await ensureMediaBalance(access, pricing.hold);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Math.min(REQUEST_TIMEOUT_MS, 180000));
@@ -1222,10 +1443,10 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
     const cost = extractTaskCost(data);
     const outputUrl = extractTaskOutputUrl(data);
     db.prepare(`
-      INSERT INTO media_tasks (id, upstream_task_id, provider, task_type, model, prompt, status, cost, usage_json, response_json, output_url, api_base_hash, api_key_hash, created_at, updated_at, completed_at)
-      VALUES (?, ?, 'compatible', 'video', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, upstreamTaskId, model, prompt, status, cost, data?.usage ? JSON.stringify(data.usage) : null, JSON.stringify(data).slice(0, 20000), outputUrl, hashSecret(T8_MEDIA_API_BASE_URL), hashSecret(mediaUpstreamKey), now, now, isFinalTaskStatus(status) ? now : null);
-    res.status(202).json({ ok: true, task: publicTask(db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(id)), access, upstream: data });
+      INSERT INTO media_tasks (id, upstream_task_id, provider, task_type, model, prompt, status, cost, usage_json, response_json, output_url, api_base_hash, api_key_hash, created_at, updated_at, completed_at, user_id, api_key_id, sale_price, hold_amount, billing_status)
+      VALUES (?, ?, 'compatible', 'video', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+    `).run(id, upstreamTaskId, model, prompt, status, cost, data?.usage ? JSON.stringify(data.usage) : null, JSON.stringify(data).slice(0, 20000), outputUrl, hashSecret(T8_MEDIA_API_BASE_URL), hashSecret(mediaUpstreamKey), now, now, isFinalTaskStatus(status) ? now : null, String(access.userId), String(access.keyId), pricing.price, pricing.hold);
+    res.status(202).json({ ok: true, task: publicTask(db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(id)), billing: { pendingCharge: pricing.price, policy: '最终 SUCCESS 后扣费，失败/取消不扣费。' }, access, upstream: data });
   } catch (err) {
     console.error('[media-video-submit] error:', { name: err?.name, message: err?.message });
     if (err.name === 'AbortError') return res.status(504).json({ error: '视频任务提交超时。' });
@@ -1267,7 +1488,9 @@ app.get('/api/media/tasks/:id', async (req, res) => {
       `).run(status, cost, latest?.usage ? JSON.stringify(latest.usage) : null, JSON.stringify(latest).slice(0, 20000), outputUrl, now, isFinalTaskStatus(status) ? now : row.completed_at, row.id);
     }
     const fresh = db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(row.id);
-    res.json({ ok: true, task: publicTask(fresh), finalCostPolicy: '视频任务以 SUCCESS/FAILURE 等最终状态里的 cost 为真实消耗；RUNNING 阶段 cost 只作参考。', upstream: latest });
+    const billing = await settleVideoBilling(fresh, latest);
+    const billedFresh = db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(row.id);
+    res.json({ ok: true, task: publicTask(billedFresh), billing, finalCostPolicy: '视频任务仅在最终 SUCCESS 后按 DreamApi 固定售价扣费；失败/取消不扣费；T8 cost 只记录为上游成本。', upstream: latest });
   } catch (err) {
     console.error('[media-task] error:', { name: err?.name, message: err?.message });
     if (err.name === 'AbortError') return res.status(504).json({ error: '任务查询超时。' });
