@@ -172,7 +172,8 @@ db.exec(`
     billing_entry_id TEXT,
     metadata_json TEXT,
     created_at INTEGER NOT NULL,
-    FOREIGN KEY (task_id) REFERENCES media_tasks(id) ON DELETE SET NULL
+    FOREIGN KEY (task_id) REFERENCES media_tasks(id) ON DELETE SET NULL,
+    UNIQUE(task_id, event_type)
   );
   CREATE INDEX IF NOT EXISTS idx_gallery_created ON gallery_items(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_gallery_hot ON gallery_items(likes DESC, views DESC, created_at DESC);
@@ -187,7 +188,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_media_tasks_created ON media_tasks(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_media_tasks_key ON media_tasks(api_key_hash, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_media_tasks_status ON media_tasks(status, updated_at DESC);
-  CREATE INDEX IF NOT EXISTS idx_media_billing_task ON media_billing_events(task_id, event_type);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_media_billing_unique_task_event ON media_billing_events(task_id, event_type) WHERE task_id IS NOT NULL;
   CREATE INDEX IF NOT EXISTS idx_media_billing_user ON media_billing_events(user_id, created_at DESC);
 `);
 
@@ -729,36 +730,55 @@ async function applyMediaBalanceEvent({ access, eventType, taskType, model, amou
 
 async function settleVideoBilling(row, latest = null) {
   if (!row || row.task_type !== 'video' || !isFinalTaskStatus(row.status) || row.billing_status !== 'PENDING') return null;
-  const access = { userId: row.user_id, keyId: row.api_key_id, groupId: 17 };
-  const upstreamCost = extractTaskCost(latest) ?? row.cost;
-  if (row.status === 'SUCCESS') {
-    if (hasMediaBillingEvent(row.id, 'video_charge')) return null;
-    const amount = roundMoney(row.sale_price || calculateMediaVideoPrice(row.model).price);
-    const billing = await applyMediaBalanceEvent({
-      access,
-      eventType: 'video_charge',
-      taskType: 'video',
-      model: row.model,
-      amount,
-      upstreamCost,
-      taskId: row.id,
-      metadata: { upstreamTaskId: row.upstream_task_id, status: row.status }
-    });
-    db.prepare('UPDATE media_tasks SET billing_status = ?, billing_event_id = ?, settled_at = ?, updated_at = ? WHERE id = ?')
-      .run('CHARGED', billing.eventId, Date.now(), Date.now(), row.id);
-    return billing;
-  }
-  if (['FAILURE', 'CANCELED'].includes(row.status)) {
-    db.prepare('UPDATE media_tasks SET billing_status = ?, refunded_at = ?, updated_at = ? WHERE id = ?')
-      .run('REFUNDED', Date.now(), Date.now(), row.id);
-    return { amount: 0, status: 'REFUNDED_NO_CHARGE' };
-  }
-  return null;
+  return withMediaTaskLock(row.id, async () => {
+    const lockedRow = db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(row.id);
+    if (!lockedRow || lockedRow.billing_status !== 'PENDING' || !isFinalTaskStatus(lockedRow.status)) return null;
+    if (hasMediaBillingEvent(lockedRow.id, 'video_charge')) {
+      db.prepare('UPDATE media_tasks SET billing_status = ?, updated_at = ? WHERE id = ?').run('CHARGED', Date.now(), lockedRow.id);
+      return null;
+    }
+    const access = { userId: lockedRow.user_id, keyId: lockedRow.api_key_id, groupId: 17 };
+    const upstreamCost = extractTaskCost(latest) ?? lockedRow.cost;
+    if (lockedRow.status === 'SUCCESS') {
+      const amount = roundMoney(lockedRow.sale_price || calculateMediaVideoPrice(lockedRow.model).price);
+      const billing = await applyMediaBalanceEvent({
+        access,
+        eventType: 'video_charge',
+        taskType: 'video',
+        model: lockedRow.model,
+        amount,
+        upstreamCost,
+        taskId: lockedRow.id,
+        metadata: { upstreamTaskId: lockedRow.upstream_task_id, status: lockedRow.status }
+      });
+      db.prepare('UPDATE media_tasks SET billing_status = ?, billing_event_id = ?, settled_at = ?, updated_at = ? WHERE id = ?')
+        .run('CHARGED', billing.eventId, Date.now(), Date.now(), lockedRow.id);
+      return billing;
+    }
+    if (['FAILURE', 'CANCELED'].includes(lockedRow.status)) {
+      db.prepare('UPDATE media_tasks SET billing_status = ?, refunded_at = ?, updated_at = ? WHERE id = ?')
+        .run('REFUNDED', Date.now(), Date.now(), lockedRow.id);
+      return { amount: 0, status: 'REFUNDED_NO_CHARGE' };
+    }
+    return null;
+  });
 }
 
 function hasMediaBillingEvent(taskId, eventType) {
   if (!taskId) return false;
   return Boolean(db.prepare('SELECT 1 FROM media_billing_events WHERE task_id = ? AND event_type = ? LIMIT 1').get(taskId, eventType));
+}
+
+async function withMediaTaskLock(taskId, fn) {
+  const lockKey = BigInt('0x' + crypto.createHash('sha256').update(String(taskId || '')).digest('hex').slice(0, 15));
+  const client = await sub2apiPool.connect();
+  try {
+    await client.query('SELECT pg_advisory_lock($1)', [lockKey.toString()]);
+    return await fn();
+  } finally {
+    await client.query('SELECT pg_advisory_unlock($1)', [lockKey.toString()]).catch(() => {});
+    client.release();
+  }
 }
 
 function hashSecret(value) {
@@ -1351,6 +1371,7 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
     const quality = pickAllowed(req.body?.quality, ALLOWED_QUALITIES, 'auto');
     const n = normalizeCount(req.body?.n);
     const salePrice = calculateMediaImagePrice(model, size, quality, n);
+    await ensureMediaBalance(access, salePrice);
     const startedAt = Date.now();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -1417,6 +1438,8 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
     if (typeof req.body?.image_url === 'string' && req.body.image_url) body.image_url = req.body.image_url.slice(0, 2000);
     if (typeof req.body?.aspect_ratio === 'string' && req.body.aspect_ratio) body.aspect_ratio = req.body.aspect_ratio.slice(0, 20);
     if (typeof req.body?.size === 'string' && req.body.size) body.size = req.body.size.slice(0, 40);
+    const pendingCount = db.prepare(`SELECT COUNT(*) AS count FROM media_tasks WHERE api_key_id = ? AND billing_status = 'PENDING' AND created_at > ?`).get(String(access.keyId), Date.now() - 6 * 60 * 60 * 1000).count;
+    if (Number(pendingCount || 0) >= 3) throw publicError(429, '当前 API Key 有过多视频任务待完成，请等待任务完成后再提交。');
     const pricing = calculateMediaVideoPrice(model);
     await ensureMediaBalance(access, pricing.hold);
 
@@ -1458,7 +1481,7 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
 app.get('/api/media/tasks/:id', async (req, res) => {
   try {
     const apiKey = normalizeApiKey(req.query?.apiKey) || getRequestApiKey(req);
-    await requireMediaApiKeyAccess(apiKey);
+    const access = await requireMediaApiKeyAccess(apiKey);
     const id = String(req.params.id || '').slice(0, 120);
     const row = db.prepare('SELECT * FROM media_tasks WHERE id = ? OR upstream_task_id = ?').get(id, id);
     if (!row) throw publicError(404, '任务不存在。');
@@ -1488,6 +1511,7 @@ app.get('/api/media/tasks/:id', async (req, res) => {
       `).run(status, cost, latest?.usage ? JSON.stringify(latest.usage) : null, JSON.stringify(latest).slice(0, 20000), outputUrl, now, isFinalTaskStatus(status) ? now : row.completed_at, row.id);
     }
     const fresh = db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(row.id);
+    if (fresh?.billing_status === 'PENDING' && isFinalTaskStatus(fresh.status)) await ensureMediaBalance(access, fresh.sale_price || calculateMediaVideoPrice(fresh.model).price);
     const billing = await settleVideoBilling(fresh, latest);
     const billedFresh = db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(row.id);
     res.json({ ok: true, task: publicTask(billedFresh), billing, finalCostPolicy: '视频任务仅在最终 SUCCESS 后按 DreamApi 固定售价扣费；失败/取消不扣费；T8 cost 只记录为上游成本。', upstream: latest });
