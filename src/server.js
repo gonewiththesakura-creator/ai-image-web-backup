@@ -556,30 +556,47 @@ function normalizeChatModel(value) {
 }
 
 const MEDIA_IMAGE_MODELS = [
-  { id: 'gpt-image-1', name: '高级作图', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 2.5, enabled: true, note: '适合复杂画面和高质量视觉。' },
-  { id: 'gpt-image-1.5', name: '高级作图增强', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3.5, enabled: true, note: '增强图像档，适合更高质量测试。' },
-  { id: 'gpt-image-2', name: '旗舰作图', type: 'image', tier: 'ultra', unit: '张', estimatedDreamPoints: 4.5, enabled: true, note: '旗舰图像档，速度可能更慢。' },
-  { id: 'dall-e-3', name: '经典标准作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 1.5, enabled: true, note: 'T8 直连图片接口已验证。' },
-  { id: 'qwen-image', name: '通用作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 2, enabled: true, note: '适合中文提示词与通用视觉。' },
-  { id: 'nano-banana', name: '轻量创意作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 2, enabled: true, note: '轻量创意图能力。' },
-  { id: 'nano-banana-pro', name: '创意作图 Pro', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3.5, enabled: true, note: '创意作图增强档。' },
-  { id: 'flux-dev', name: 'Flux 快速作图', type: 'image', tier: 'fast', unit: '张', estimatedDreamPoints: 1.5, enabled: true, note: '快速出图档。' },
-  { id: 'flux-pro', name: 'Flux 专业作图', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3, enabled: true, note: '专业作图档。' },
-  { id: 'grok-4.1-image', name: 'Beta 作图', type: 'image', tier: 'beta', unit: '张', estimatedDreamPoints: 4, enabled: true, note: 'Beta 能力，稳定性可能波动。' }
+  { id: 'qwen-image', name: '通用作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 2, enabled: true, note: '实测可用，适合中文提示词与通用视觉。' },
+  { id: 'gpt-image-1', name: '高级作图', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 2.5, enabled: true, note: '实测可用，适合复杂画面和高质量视觉。' },
+  { id: 'gpt-image-1-mini', name: '高级作图 Mini', type: 'image', tier: 'fast', unit: '张', estimatedDreamPoints: 1.5, enabled: true, note: '实测可用，返回 base64 图片，适合快速图像生成。' },
+  { id: 'flux-schnell', name: 'Flux 极速作图', type: 'image', tier: 'fast', unit: '张', estimatedDreamPoints: 1.2, enabled: true, note: '实测可用，返回 base64 图片，速度较快。' },
+  { id: 'dall-e-3', name: '经典标准作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 1.5, enabled: true, note: '复测可用，但出图较慢。' },
+  { id: 'gpt-image-2', name: '旗舰作图', type: 'image', tier: 'ultra', unit: '张', estimatedDreamPoints: 4.5, enabled: true, note: '复测可用，但耗时较长，建议小范围使用。' },
+  { id: 'nano-banana', name: '轻量创意作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 2, enabled: false, note: '上游当前返回 500，暂不开放。' },
+  { id: 'flux-kontext-pro', name: 'Flux Kontext Pro', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3, enabled: false, note: '上游当前返回 408/openai_error，暂不开放。' },
+  { id: 'gpt-image-1.5', name: '高级作图增强', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3.5, enabled: false, note: '上游当前无可用渠道，暂不开放。' },
+  { id: 'nano-banana-pro', name: '创意作图 Pro', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3.5, enabled: false, note: '上游当前无可用渠道，暂不开放。' },
+  { id: 'flux-dev', name: 'Flux 快速作图', type: 'image', tier: 'fast', unit: '张', estimatedDreamPoints: 1.5, enabled: false, note: '上游超时，不稳定，暂不展示。' },
+  { id: 'flux-pro', name: 'Flux 专业作图', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3, enabled: false, note: '上游返回 Model disabled，暂不开放。' },
+  { id: 'grok-4.1-image', name: 'Beta 作图', type: 'image', tier: 'beta', unit: '张', estimatedDreamPoints: 4, enabled: false, note: '上游超时，不稳定，暂不展示。' }
 ];
 
 const MEDIA_VIDEO_MODELS = [
-  { id: 'wanx2.1-t2v-turbo', name: 'Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 5, defaultDuration: null, enabled: true, note: 'T8 视频接口已验证可提交任务，适合低成本内测。' },
-  { id: 'wan2.2-t2v-plus', name: 'Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 12, defaultDuration: null, enabled: true, note: '固定任务计费，最终以任务状态 cost 为准。' },
-  { id: 'MiniMax-Hailuo-02', name: 'Standard 视频', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 8, defaultDuration: 6, enabled: true, note: '适合短视频测试。' },
-  { id: 'sora-2', name: '创意视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 12, defaultDuration: null, enabled: true, note: '高价创意视频能力，建议小范围使用。' },
-  { id: 'veo3.1-fast', name: 'Fast 视频增强', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: true, note: '上游视频能力，最终消耗以任务状态为准。' },
-  { id: 'grok-video-3', name: 'Beta 视频', type: 'video', tier: 'beta', unit: '次', estimatedDreamPoints: 6, defaultDuration: null, enabled: true, note: 'Beta 能力，稳定性波动时建议失败退款。' }
+  { id: 'wanx2.1-t2v-turbo', name: 'Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 5, defaultDuration: null, enabled: true, note: '实测可提交并最终成功，适合低成本内测。' },
+  { id: 'wanx2.1-t2v-plus', name: 'Fast 视频 Plus', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: true, note: '实测可提交并最终成功。' },
+  { id: 'wan2.2-t2v-plus', name: 'Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 12, defaultDuration: null, enabled: true, note: '实测可提交并最终成功。' },
+  { id: 'wan2.5-t2v-preview', name: 'Pro 视频预览', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 12, defaultDuration: null, enabled: true, note: '实测可提交并最终成功，预览能力。' },
+  { id: 'wan2.6-t2v', name: '旗舰视频', type: 'video', tier: 'ultra', unit: '次', estimatedDreamPoints: 16, defaultDuration: null, enabled: true, note: '实测可提交并最终成功。' },
+  { id: 'MiniMax-Hailuo-02', name: 'Standard 视频', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 8, defaultDuration: 6, enabled: true, note: '实测可提交并最终成功，适合短视频测试。' },
+  { id: 'MiniMax-Hailuo-2.3', name: 'Standard 视频增强', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 10, defaultDuration: 6, enabled: true, note: '实测可提交并最终成功。' },
+  { id: 'T2V-01', name: '导演视频', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: true, note: '实测可提交并最终成功。' },
+  { id: 'sdols-2.0-fast', name: '极速视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 6, defaultDuration: null, enabled: true, note: '实测可提交并最终成功。' },
+  { id: 'doubao-seedance-1-0-pro-fast-251015', name: 'Seedance Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: true, note: '实测可提交并最终成功。' },
+  { id: 'veo3.1-lite', name: 'Lite 视频增强', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 10, defaultDuration: null, enabled: true, note: '实测可提交并最终成功。' },
+  { id: 'grok-video-3', name: 'Beta 视频', type: 'video', tier: 'beta', unit: '次', estimatedDreamPoints: 6, defaultDuration: null, enabled: false, note: '本轮上游提交返回 502，暂不开放。' },
+  { id: 'sdols-2.0', name: '标准视频增强', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: false, note: '本轮受上游预扣余额限制未完成验证，暂不开放。' },
+  { id: 'doubao-seedance-2-0-fast-260128', name: 'Seedance 2 Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 10, defaultDuration: null, enabled: false, note: '本轮受上游预扣余额限制未完成验证，暂不开放。' },
+  { id: 'doubao-seedance-2-0-260128', name: 'Seedance 2 Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 14, defaultDuration: null, enabled: false, note: '本轮受上游预扣余额限制未完成验证，暂不开放。' },
+  { id: 'sora-2', name: '创意视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 12, defaultDuration: null, enabled: false, note: '上游当前提交返回 400，暂不开放。' },
+  { id: 'veo3.1-fast', name: 'Fast 视频增强', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: false, note: '上游当前无可用渠道，暂不开放。' }
 ];
 
 const MEDIA_MODEL_MAP = new Map([...MEDIA_IMAGE_MODELS, ...MEDIA_VIDEO_MODELS].map((item) => [item.id, item]));
 const MEDIA_IMAGE_PRICING = {
   'gpt-image-1': { base: 0.60 },
+  'gpt-image-1-mini': { base: 0.40 },
+  'flux-schnell': { base: 0.30 },
+  'flux-kontext-pro': { base: 0.80 },
   'gpt-image-1.5': { base: 0.90 },
   'gpt-image-2': { base: 1.20 },
   'dall-e-3': { base: 0.45 },
@@ -602,8 +619,19 @@ const MEDIA_SIZE_MULTIPLIERS = {
 const MEDIA_QUALITY_MULTIPLIERS = { low: 0.75, medium: 1, auto: 1, high: 1.6 };
 const MEDIA_VIDEO_PRICING = {
   'wanx2.1-t2v-turbo': { hold: 3.00, price: 3.00 },
+  'wanx2.1-t2v-plus': { hold: 5.00, price: 5.00 },
   'wan2.2-t2v-plus': { hold: 8.00, price: 8.00 },
+  'wan2.5-t2v-preview': { hold: 8.00, price: 8.00 },
+  'wan2.6-t2v': { hold: 12.00, price: 12.00 },
   'MiniMax-Hailuo-02': { hold: 6.00, price: 6.00 },
+  'MiniMax-Hailuo-2.3': { hold: 8.00, price: 8.00 },
+  'T2V-01': { hold: 6.00, price: 6.00 },
+  'sdols-2.0-fast': { hold: 5.00, price: 5.00 },
+  'sdols-2.0': { hold: 7.00, price: 7.00 },
+  'doubao-seedance-1-0-pro-fast-251015': { hold: 6.00, price: 6.00 },
+  'doubao-seedance-2-0-fast-260128': { hold: 8.00, price: 8.00 },
+  'doubao-seedance-2-0-260128': { hold: 10.00, price: 10.00 },
+  'veo3.1-lite': { hold: 8.00, price: 8.00 },
   'sora-2': { hold: 20.00, price: 20.00 },
   'veo3.1-fast': { hold: 12.00, price: 12.00 },
   'grok-video-3': { hold: 8.00, price: 8.00 }
@@ -619,7 +647,7 @@ function normalizeMediaModel(value, type) {
   const requested = String(value || '').trim();
   const item = MEDIA_MODEL_MAP.get(requested);
   if (item && item.type === type && item.enabled) return item.id;
-  const fallback = type === 'video' ? MEDIA_VIDEO_MODELS[0] : MEDIA_IMAGE_MODELS[0];
+  const fallback = (type === 'video' ? MEDIA_VIDEO_MODELS : MEDIA_IMAGE_MODELS).find((model) => model.enabled);
   if (!fallback) throw publicError(503, `暂未开放${type === 'video' ? '视频' : '图片'}媒体模型。`);
   return fallback.id;
 }
@@ -1344,8 +1372,8 @@ app.get('/api/media/models', (req, res) => {
   res.json({
     ok: true,
     policy: '客户侧仅展示 DreamApi 自有能力档位；实际消耗以接口返回 usage/cost 或异步任务最终状态为准。',
-    image: MEDIA_IMAGE_MODELS,
-    video: MEDIA_VIDEO_MODELS
+    image: MEDIA_IMAGE_MODELS.filter((item) => item.enabled),
+    video: MEDIA_VIDEO_MODELS.filter((item) => item.enabled)
   });
 });
 
