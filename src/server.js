@@ -518,27 +518,98 @@ function normalizeChatModel(value) {
 }
 
 const MEDIA_IMAGE_MODELS = [
-  { id: 'gpt-image-1', name: '高级作图', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 2.5, enabled: true, note: '已验证可通过媒体接口生成图片，适合复杂画面。' },
-  { id: 'gpt-image-2', name: '旗舰作图', type: 'image', tier: 'ultra', unit: '张', estimatedDreamPoints: 4.5, enabled: true, note: '旗舰图像档，速度可能更慢。' },
-  { id: 'gpt-image-1.5', name: '高级作图增强', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3.5, enabled: true, note: '增强图像档，适合更高质量测试。' }
+  { id: 'gpt-image-1', name: '高级作图', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 2.5, enabled: true, note: 'T8 图片接口已验证，适合复杂画面和高质量视觉。' },
+  { id: 'gpt-image-1.5', name: '高级作图增强', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3.5, enabled: true, note: '增强图像档，适合更高质量测试。' },
+  { id: 'gpt-image-2', name: '旗舰作图', type: 'image', tier: 'ultra', unit: '张', estimatedDreamPoints: 4.5, enabled: true, note: '旗舰图像档，速度可能更慢。' }
 ];
 
 const MEDIA_VIDEO_MODELS = [
+  { id: 'wanx2.1-t2v-turbo', name: 'Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 5, defaultDuration: null, enabled: true, note: 'T8 视频接口已验证可提交任务，适合低成本内测。' },
+  { id: 'wan2.2-t2v-plus', name: 'Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 12, defaultDuration: null, enabled: true, note: '固定任务计费，最终以任务状态 cost 为准。' },
+  { id: 'MiniMax-Hailuo-02', name: 'Standard 视频', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 8, defaultDuration: 6, enabled: true, note: '适合短视频测试。' },
+  { id: 'sora-2', name: '创意视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 12, defaultDuration: null, enabled: true, note: '高价创意视频能力，建议小范围使用。' },
+  { id: 'veo3.1-fast', name: 'Fast 视频增强', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: true, note: '上游视频能力，最终消耗以任务状态为准。' },
+  { id: 'grok-video-3', name: 'Beta 视频', type: 'video', tier: 'beta', unit: '次', estimatedDreamPoints: 6, defaultDuration: null, enabled: true, note: 'Beta 能力，稳定性波动时建议失败退款。' }
 ];
 
 const MEDIA_MODEL_MAP = new Map([...MEDIA_IMAGE_MODELS, ...MEDIA_VIDEO_MODELS].map((item) => [item.id, item]));
 const VIDEO_API_BASE_URL = (process.env.VIDEO_API_BASE_URL || API_BASE_URL.replace(/\/v1$/, '')).replace(/\/$/, '');
+const MEDIA_REQUIRE_9999 = String(process.env.MEDIA_REQUIRE_9999 || '1') !== '0';
+const SUB2API_DATABASE_URL = process.env.SUB2API_DATABASE_URL || 'postgresql://sub2api:sub2api@sub2api-postgres:5432/sub2api';
+const sub2apiPool = new pg.Pool({ connectionString: SUB2API_DATABASE_URL, max: 3, idleTimeoutMillis: 30000, connectionTimeoutMillis: 5000 });
+const T8_MEDIA_API_BASE_URL = (process.env.T8_MEDIA_API_BASE_URL || VIDEO_API_BASE_URL || API_BASE_URL.replace(/\/v1$/, '')).replace(/\/$/, '');
+const T8_MEDIA_API_KEY = normalizeApiKey(process.env.T8_MEDIA_API_KEY || '');
 
 function normalizeMediaModel(value, type) {
   const requested = String(value || '').trim();
   const item = MEDIA_MODEL_MAP.get(requested);
   if (item && item.type === type && item.enabled) return item.id;
   const fallback = type === 'video' ? MEDIA_VIDEO_MODELS[0] : MEDIA_IMAGE_MODELS[0];
+  if (!fallback) throw publicError(503, `暂未开放${type === 'video' ? '视频' : '图片'}媒体模型。`);
   return fallback.id;
 }
 
 function hashSecret(value) {
   return crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 32);
+}
+
+async function getSub2ApiColumns(tableName) {
+  const result = await sub2apiPool.query(
+    `SELECT column_name FROM information_schema.columns WHERE table_name = $1`,
+    [tableName]
+  );
+  return new Set(result.rows.map((row) => row.column_name));
+}
+
+async function requireMediaApiKeyAccess(apiKey) {
+  const normalized = normalizeApiKey(apiKey);
+  if (!normalized) throw publicError(401, '请输入 9999 套餐 API Key 后再使用媒体创作。');
+  try {
+    const [apiKeyColumns, groupColumns] = await Promise.all([
+      getSub2ApiColumns('api_keys'),
+      getSub2ApiColumns('groups')
+    ]);
+    const select = ['k.id', 'k.name', 'k.user_id', 'k.status', 'k.group_id'];
+    if (apiKeyColumns.has('quota')) select.push('k.quota');
+    if (apiKeyColumns.has('quota_used')) select.push('k.quota_used');
+    if (groupColumns.has('name')) select.push('g.name AS group_name');
+    if (groupColumns.has('status')) select.push('g.status AS group_status');
+    if (groupColumns.has('subscription_type')) select.push('g.subscription_type AS subscription_type');
+    if (groupColumns.has('allow_image_generation')) select.push('g.allow_image_generation AS allow_image_generation');
+    select.push(`EXISTS (SELECT 1 FROM subscription_plans sp WHERE sp.group_id = k.group_id AND (sp.price = 9999 OR sp.name ~* '9999' OR COALESCE(sp.description, '') ~* '9999')) AS has_9999_plan`);
+    const result = await sub2apiPool.query(
+      `SELECT ${select.join(', ')} FROM api_keys k LEFT JOIN groups g ON g.id = k.group_id WHERE k.key = $1 LIMIT 1`,
+      [normalized]
+    );
+    const row = result.rows[0];
+    if (!row) throw publicError(401, 'API Key 不存在，请检查 DreamApi 控制台。');
+    const keyStatus = String(row.status || '').toLowerCase();
+    const groupStatus = String(row.group_status || 'active').toLowerCase();
+    if (!['', 'active', 'enabled', '1', 'true'].includes(keyStatus)) throw publicError(403, 'API Key 当前不可用。');
+    if (!['', 'active', 'enabled', '1', 'true'].includes(groupStatus)) throw publicError(403, '该 API Key 所属套餐当前不可用。');
+    const groupName = String(row.group_name || '');
+    const subscriptionType = String(row.subscription_type || '');
+    const allowImageGeneration = row.allow_image_generation === true || row.allow_image_generation === 1 || String(row.allow_image_generation).toLowerCase() === 'true';
+    const is9999 = /9999/.test(`${groupName} ${subscriptionType}`) || row.has_9999_plan === true || row.has_9999_plan === 1 || String(row.has_9999_plan).toLowerCase() === 'true';
+    const isMedia = /media|image|video|媒体|视频|图/i.test(groupName) || allowImageGeneration;
+    if (MEDIA_REQUIRE_9999 && !is9999) throw publicError(403, '该 API Key 不是 9999 媒体套餐，不能使用 T8 媒体能力。');
+    if (!isMedia) throw publicError(403, '该 API Key 未开通媒体创作分组。');
+    return {
+      keyId: row.id,
+      keyName: row.name,
+      userId: row.user_id,
+      groupId: row.group_id,
+      groupName,
+      subscriptionType,
+      is9999,
+      has9999Plan: Boolean(row.has_9999_plan),
+      isMedia
+    };
+  } catch (err) {
+    if (err.status) throw err;
+    console.error('[media-auth] failed:', { message: err?.message });
+    throw publicError(503, '媒体套餐校验暂时不可用，请稍后重试。');
+  }
 }
 
 function parseJsonText(text) {
@@ -553,8 +624,25 @@ function extractTaskStatus(data) {
   return String(data?.status || data?.data?.status || data?.task_status || data?.state || 'UNKNOWN').toUpperCase();
 }
 
+function normalizeTaskStatus(status) {
+  const raw = String(status || '').toUpperCase();
+  if (['SUCCESS', 'SUCCEEDED', 'COMPLETED', 'FINISHED', 'FINISH'].includes(raw)) return 'SUCCESS';
+  if (['FAILURE', 'FAILED', 'ERROR'].includes(raw)) return 'FAILURE';
+  if (['CANCELED', 'CANCELLED'].includes(raw)) return 'CANCELED';
+  if (['RUNNING', 'PROCESSING', 'IN_PROGRESS', 'GENERATING'].includes(raw)) return 'RUNNING';
+  if (['PENDING', 'SUBMITTED', 'QUEUED', 'NOT_START', 'NOT_STARTED', 'WAITING'].includes(raw)) return 'SUBMITTED';
+  return raw || 'UNKNOWN';
+}
+
 function extractTaskCost(data) {
-  const candidates = [data?.cost, data?.data?.cost, data?.usage?.cost, data?.data?.usage?.cost, data?.billing?.cost];
+  const candidates = [
+    data?.cost,
+    data?.data?.cost,
+    data?.usage?.cost,
+    data?.data?.usage?.cost,
+    data?.billing?.cost,
+    data?.data?.billing?.cost
+  ];
   for (const value of candidates) {
     const n = Number(value);
     if (Number.isFinite(n)) return n;
@@ -564,7 +652,8 @@ function extractTaskCost(data) {
 
 function extractTaskOutputUrl(data) {
   const candidates = [
-    data?.url, data?.video_url, data?.output_url, data?.data?.url, data?.data?.video_url, data?.data?.output_url,
+    data?.url, data?.video_url, data?.output_url,
+    data?.data?.url, data?.data?.video_url, data?.data?.output_url, data?.data?.output,
     data?.data?.video?.url, data?.data?.result?.url, data?.result?.url
   ];
   for (const value of candidates) {
@@ -582,7 +671,7 @@ function extractTaskOutputUrl(data) {
 }
 
 function isFinalTaskStatus(status) {
-  return ['SUCCESS', 'SUCCEEDED', 'COMPLETED', 'FAILURE', 'FAILED', 'CANCELED', 'CANCELLED'].includes(String(status || '').toUpperCase());
+  return ['SUCCESS', 'SUCCEEDED', 'COMPLETED', 'FINISHED', 'FINISH', 'FAILURE', 'FAILED', 'ERROR', 'CANCELED', 'CANCELLED'].includes(String(status || '').toUpperCase());
 }
 
 function publicTask(row) {
@@ -1024,10 +1113,20 @@ app.get('/api/media/models', (req, res) => {
   });
 });
 
+app.get('/api/media/me', async (req, res, next) => {
+  try {
+    const apiKey = normalizeApiKey(req.query?.apiKey) || getRequestApiKey(req);
+    const access = await requireMediaApiKeyAccess(apiKey);
+    res.json({ ok: true, access });
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.post('/api/media/images/generations', limiter, async (req, res) => {
   try {
     const apiKey = getRequestApiKey(req);
-    if (!apiKey) throw publicError(401, '请输入 API Key 后再调用媒体作图接口。');
+    const access = await requireMediaApiKeyAccess(apiKey);
     const prompt = normalizePrompt(req.body?.prompt);
     if (!prompt) throw publicError(400, '请输入图片描述。');
     const model = normalizeMediaModel(req.body?.model, 'image');
@@ -1038,10 +1137,11 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
     const startedAt = Date.now();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const mediaUpstreamKey = T8_MEDIA_API_KEY || apiKey;
     const upstreamResp = await fetch(`${API_BASE_URL}/images/generations`, {
       method: 'POST',
       signal: controller.signal,
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${mediaUpstreamKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, prompt, size, quality, output_format, n })
     }).finally(() => clearTimeout(timeout));
     const text = await upstreamResp.text();
@@ -1064,7 +1164,8 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
       cost,
       usage: data?.usage || null,
       elapsedMs: Date.now() - startedAt,
-      rawStatus: data?.status || null
+      rawStatus: data?.status || null,
+      access
     });
   } catch (err) {
     console.error('[media-image] error:', { name: err?.name, message: err?.message });
@@ -1077,7 +1178,7 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
 app.post('/api/media/videos/generations', limiter, async (req, res) => {
   try {
     const apiKey = getRequestApiKey(req);
-    if (!apiKey) throw publicError(401, '请输入 API Key 后再提交视频任务。');
+    const access = await requireMediaApiKeyAccess(apiKey);
     const prompt = normalizePrompt(req.body?.prompt);
     if (!prompt) throw publicError(400, '请输入视频描述。');
     const model = normalizeMediaModel(req.body?.model, 'video');
@@ -1091,10 +1192,11 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Math.min(REQUEST_TIMEOUT_MS, 180000));
-    const upstreamResp = await fetch(`${VIDEO_API_BASE_URL}/v2/videos/generations`, {
+    const mediaUpstreamKey = T8_MEDIA_API_KEY || apiKey;
+    const upstreamResp = await fetch(`${T8_MEDIA_API_BASE_URL}/v2/videos/generations`, {
       method: 'POST',
       signal: controller.signal,
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${mediaUpstreamKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     }).finally(() => clearTimeout(timeout));
     const text = await upstreamResp.text();
@@ -1107,14 +1209,14 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
     if (!upstreamTaskId) return res.status(502).json({ error: '上游未返回 task_id，无法跟踪任务。', upstream: data });
     const now = Date.now();
     const id = crypto.randomUUID();
-    const status = extractTaskStatus(data);
+    const status = normalizeTaskStatus(extractTaskStatus(data));
     const cost = extractTaskCost(data);
     const outputUrl = extractTaskOutputUrl(data);
     db.prepare(`
       INSERT INTO media_tasks (id, upstream_task_id, provider, task_type, model, prompt, status, cost, usage_json, response_json, output_url, api_base_hash, api_key_hash, created_at, updated_at, completed_at)
       VALUES (?, ?, 'compatible', 'video', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, upstreamTaskId, model, prompt, status, cost, data?.usage ? JSON.stringify(data.usage) : null, JSON.stringify(data).slice(0, 20000), outputUrl, hashSecret(VIDEO_API_BASE_URL), hashSecret(apiKey), now, now, isFinalTaskStatus(status) ? now : null);
-    res.status(202).json({ ok: true, task: publicTask(db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(id)), upstream: data });
+    `).run(id, upstreamTaskId, model, prompt, status, cost, data?.usage ? JSON.stringify(data.usage) : null, JSON.stringify(data).slice(0, 20000), outputUrl, hashSecret(T8_MEDIA_API_BASE_URL), hashSecret(mediaUpstreamKey), now, now, isFinalTaskStatus(status) ? now : null);
+    res.status(202).json({ ok: true, task: publicTask(db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(id)), access, upstream: data });
   } catch (err) {
     console.error('[media-video-submit] error:', { name: err?.name, message: err?.message });
     if (err.name === 'AbortError') return res.status(504).json({ error: '视频任务提交超时。' });
@@ -1126,11 +1228,11 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
 app.get('/api/media/tasks/:id', async (req, res) => {
   try {
     const apiKey = normalizeApiKey(req.query?.apiKey) || getRequestApiKey(req);
-    if (!apiKey) throw publicError(401, '请输入 API Key 后再查询任务。');
+    await requireMediaApiKeyAccess(apiKey);
     const id = String(req.params.id || '').slice(0, 120);
     const row = db.prepare('SELECT * FROM media_tasks WHERE id = ? OR upstream_task_id = ?').get(id, id);
     if (!row) throw publicError(404, '任务不存在。');
-    if (row.api_key_hash !== hashSecret(apiKey)) throw publicError(403, '该 API Key 无权查看此任务。');
+    if (row.api_key_hash !== hashSecret(T8_MEDIA_API_KEY || apiKey) && row.api_key_hash !== hashSecret(apiKey)) throw publicError(403, '该 API Key 无权查看此任务。');
 
     let latest = null;
     if (row.task_type === 'video' && !isFinalTaskStatus(row.status)) {
@@ -1146,7 +1248,7 @@ app.get('/api/media/tasks/:id', async (req, res) => {
       if (!upstreamResp.ok) {
         return res.status(upstreamResp.status >= 500 ? 502 : upstreamResp.status).json({ error: latest?.error?.message || latest?.message || '任务查询失败。', task: publicTask(row), upstream: latest });
       }
-      const status = extractTaskStatus(latest);
+      const status = normalizeTaskStatus(extractTaskStatus(latest));
       const cost = extractTaskCost(latest);
       const outputUrl = extractTaskOutputUrl(latest);
       const now = Date.now();
@@ -1165,10 +1267,10 @@ app.get('/api/media/tasks/:id', async (req, res) => {
   }
 });
 
-app.get('/api/media/tasks', (req, res) => {
+app.get('/api/media/tasks', async (req, res) => {
   try {
     const apiKey = normalizeApiKey(req.query?.apiKey) || getRequestApiKey(req);
-    if (!apiKey) throw publicError(401, '请输入 API Key 后再查询任务列表。');
+    await requireMediaApiKeyAccess(apiKey);
     const limit = Math.min(Math.max(Number(req.query?.limit || 20), 1), 100);
     const rows = db.prepare('SELECT * FROM media_tasks WHERE api_key_hash = ? ORDER BY created_at DESC LIMIT ?').all(hashSecret(apiKey), limit);
     const totalCost = db.prepare('SELECT COALESCE(SUM(cost), 0) AS cost FROM media_tasks WHERE api_key_hash = ? AND completed_at IS NOT NULL').get(hashSecret(apiKey)).cost || 0;

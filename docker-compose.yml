@@ -20,6 +20,9 @@ services:
       - TRIAL_API_KEY=sk-e4aeba2e12f404252e670413436795a3e91efa3fad0c040defc02c6e8155daff
       - ADMIN_PASSWORD=admin123456
       - UMAMI_DATABASE_URL=postgresql://umami:${UMAMI_DB_PASSWORD}@umami-postgres:5432/umami
+      - MEDIA_REQUIRE_9999=1
+      - SUB2API_DATABASE_URL=postgresql://sub2api:5023f63f13d932a6b36af8b154dbf6eef52c6f10fd2829477d6574285388b228@sub2api-postgres:5432/sub2api
+      - VIDEO_API_BASE_URL=https://ai.t8star.org
       - UMAMI_WEBSITE_ID=595998a1-3596-4065-853e-6952ee26c957
     restart: unless-stopped
     extra_hosts:

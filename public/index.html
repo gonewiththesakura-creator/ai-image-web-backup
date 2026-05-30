@@ -317,7 +317,7 @@
           <button type="button" class="active" data-view-tab="draw"><span class="nav-emoji">🎨</span><span>创作</span></button>
           <button type="button" data-view-tab="gallery"><span class="nav-emoji">🖼️</span><span>画廊</span></button>
           <button type="button" data-view-tab="chat"><span class="nav-emoji">💬</span><span>聊一聊</span></button>
-          <button type="button" data-view-tab="media"><span class="nav-emoji">🎬</span><span>媒体 API</span></button>
+          <button type="button" data-view-tab="media"><span class="nav-emoji">🎬</span><span>媒体创作</span></button>
         </nav>
       </aside>
 
@@ -456,13 +456,13 @@
         </section>
 
         <section class="view-panel" data-view-panel="media">
-          <section class="card media-card" aria-label="媒体 API">
+          <section class="card media-card" aria-label="媒体创作">
             <div class="media-head">
               <div>
-                <h2>媒体 API 测试台</h2>
-                <p>输入 DreamApi / 兼容 API Key，可提交图片生成和视频任务；视频任务会记录 task_id、状态与最终 cost。</p>
+                <h2>媒体创作</h2>
+                <p>使用 9999 媒体套餐 API Key 生成图片和提交视频任务；任务会记录状态、结果链接与最终 cost。</p>
               </div>
-              <div class="pill">Images + Video Tasks</div>
+              <div class="pill">Image + Video Studio</div>
             </div>
             <div class="media-tabs">
               <button id="mediaImageTab" type="button" class="active">图片接口</button>
@@ -1443,7 +1443,7 @@
     async function submitMediaTask() {
       const apiKey = $('apiKey').value.trim();
       const prompt = mediaPrompt.value.trim() || $('prompt').value.trim();
-      if (!apiKey) { setMediaStatus('请先在顶部 API Key 输入框填入 DreamApi / 兼容 API Key。', 'error'); return; }
+      if (!apiKey) { setMediaStatus('请先在顶部 API Key 输入框填入 9999 媒体套餐 API Key。', 'error'); return; }
       if (!prompt) { setMediaStatus('请输入媒体描述。', 'error'); mediaPrompt.focus(); return; }
       if (!selectedMediaModel) { setMediaStatus('请选择一个能力档位。', 'error'); return; }
       localStorage.setItem('dreamapi_image_key', apiKey);
@@ -1464,6 +1464,7 @@
 状态：${task.status}
 请等待最终 SUCCESS/FAILURE 后查看真实 cost。`, 'ok');
           await refreshMediaTasks();
+          pollMediaTask(task.id || task.upstreamTaskId);
         } else {
           const images = data.images || [];
           renderImages(images);
@@ -1475,6 +1476,28 @@
         setMediaStatus(err.message || '媒体接口调用失败。', 'error');
       } finally {
         submitMediaBtn.disabled = false;
+      }
+    }
+
+    async function pollMediaTask(taskId) {
+      if (!taskId) return;
+      const apiKey = $('apiKey').value.trim();
+      const finalStatuses = new Set(['SUCCESS', 'FAILURE', 'CANCELED']);
+      for (let i = 0; i < 60; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, i < 6 ? 5000 : 10000));
+        try {
+          const resp = await fetch(`${MEDIA_TASKS_ENDPOINT}/${encodeURIComponent(taskId)}?apiKey=${encodeURIComponent(apiKey)}`);
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(data.error || '任务查询失败');
+          const task = data.task || {};
+          setMediaStatus(`视频任务状态：${task.status}\n最终 cost：${task.cost ?? '等待最终结算'}${task.outputUrl ? `\n结果：${task.outputUrl}` : ''}`, finalStatuses.has(task.status) ? (task.status === 'SUCCESS' ? 'ok' : 'error') : '');
+          if (task.outputUrl) mediaOutput.innerHTML = `<video src="${escapeHtml(task.outputUrl)}" controls playsinline></video>`;
+          await refreshMediaTasks();
+          if (finalStatuses.has(task.status)) return;
+        } catch (err) {
+          setMediaStatus(err.message || '任务轮询失败。', 'error');
+          return;
+        }
       }
     }
 
@@ -1490,6 +1513,7 @@
           <div class="task-item">
             <strong>${escapeHtml(task.model)} · ${escapeHtml(task.status)} · cost ${task.cost ?? '未最终结算'}</strong>
             ${task.outputUrl ? `<a href="${escapeHtml(task.outputUrl)}" target="_blank" rel="noreferrer">打开结果</a>` : ''}
+            <button type="button" class="secondary" style="margin-top:8px;padding:8px 11px;font-size:12px;" data-poll-task="${escapeHtml(task.id)}">查询/轮询</button>
             <pre>${escapeHtml(task.id)}
 ${escapeHtml(task.upstreamTaskId)}
 ${escapeHtml(task.updatedAt)}</pre>
@@ -1505,8 +1529,8 @@ ${escapeHtml(task.updatedAt)}</pre>
       const prompt = mediaPrompt.value.trim() || '一只白色猫咪在雨夜霓虹街头奔跑，电影感';
       const endpoint = mediaMode === 'video' ? '/api/media/videos/generations' : '/api/media/images/generations';
       const payload = mediaMode === 'video'
-        ? { apiKey, model: selectedMediaModel || 'doubao-seedance-1-0-pro-fast-251015', prompt, duration: Number(mediaDuration.value), aspect_ratio: mediaAspect.value }
-        : { apiKey, model: selectedMediaModel || 'doubao-seedream-4-0-250828', prompt, size: $('sizePreset').value, format: $('format').value, n: 1 };
+        ? { apiKey, model: selectedMediaModel || 'wanx2.1-t2v-turbo', prompt, duration: Number(mediaDuration.value), aspect_ratio: mediaAspect.value }
+        : { apiKey, model: selectedMediaModel || 'gpt-image-1', prompt, size: $('sizePreset').value, format: $('format').value, n: 1 };
       const text = `curl -X POST ${location.origin}${endpoint} -H 'Content-Type: application/json' -d '${JSON.stringify(payload).replace(/'/g, "'\''")}'`;
       navigator.clipboard?.writeText(text).then(() => setMediaStatus('接口示例已复制。', 'ok')).catch(() => setMediaStatus(text));
     }
@@ -1521,6 +1545,11 @@ ${escapeHtml(task.updatedAt)}</pre>
     });
     submitMediaBtn.onclick = submitMediaTask;
     refreshTasksBtn.onclick = refreshMediaTasks;
+    mediaTaskList.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-poll-task]');
+      if (!btn) return;
+      pollMediaTask(btn.dataset.pollTask);
+    });
     copyApiExampleBtn.onclick = copyApiExample;
 
     viewTabs.forEach((tab) => tab.addEventListener('click', () => switchView(tab.dataset.viewTab)));
