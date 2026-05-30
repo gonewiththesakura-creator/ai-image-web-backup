@@ -23,6 +23,8 @@ services:
       - MEDIA_REQUIRE_9999=1
       - SUB2API_DATABASE_URL=postgresql://sub2api:5023f63f13d932a6b36af8b154dbf6eef52c6f10fd2829477d6574285388b228@sub2api-postgres:5432/sub2api
       - VIDEO_API_BASE_URL=https://ai.t8star.org
+      - T8_MEDIA_API_BASE_URL=https://ai.t8star.org
+      - T8_MEDIA_API_KEY=sk-3HNkro5cCnJuHLuLubINcx7SYOivzOilgfSENrhRPwJnxQmj
       - UMAMI_WEBSITE_ID=595998a1-3596-4065-853e-6952ee26c957
     restart: unless-stopped
     extra_hosts:

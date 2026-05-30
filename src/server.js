@@ -518,9 +518,16 @@ function normalizeChatModel(value) {
 }
 
 const MEDIA_IMAGE_MODELS = [
-  { id: 'gpt-image-1', name: '高级作图', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 2.5, enabled: true, note: 'T8 图片接口已验证，适合复杂画面和高质量视觉。' },
+  { id: 'gpt-image-1', name: '高级作图', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 2.5, enabled: true, note: '适合复杂画面和高质量视觉。' },
   { id: 'gpt-image-1.5', name: '高级作图增强', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3.5, enabled: true, note: '增强图像档，适合更高质量测试。' },
-  { id: 'gpt-image-2', name: '旗舰作图', type: 'image', tier: 'ultra', unit: '张', estimatedDreamPoints: 4.5, enabled: true, note: '旗舰图像档，速度可能更慢。' }
+  { id: 'gpt-image-2', name: '旗舰作图', type: 'image', tier: 'ultra', unit: '张', estimatedDreamPoints: 4.5, enabled: true, note: '旗舰图像档，速度可能更慢。' },
+  { id: 'dall-e-3', name: '经典标准作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 1.5, enabled: true, note: 'T8 直连图片接口已验证。' },
+  { id: 'qwen-image', name: '通用作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 2, enabled: true, note: '适合中文提示词与通用视觉。' },
+  { id: 'nano-banana', name: '轻量创意作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 2, enabled: true, note: '轻量创意图能力。' },
+  { id: 'nano-banana-pro', name: '创意作图 Pro', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3.5, enabled: true, note: '创意作图增强档。' },
+  { id: 'flux-dev', name: 'Flux 快速作图', type: 'image', tier: 'fast', unit: '张', estimatedDreamPoints: 1.5, enabled: true, note: '快速出图档。' },
+  { id: 'flux-pro', name: 'Flux 专业作图', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3, enabled: true, note: '专业作图档。' },
+  { id: 'grok-4.1-image', name: 'Beta 作图', type: 'image', tier: 'beta', unit: '张', estimatedDreamPoints: 4, enabled: true, note: 'Beta 能力，稳定性可能波动。' }
 ];
 
 const MEDIA_VIDEO_MODELS = [
@@ -663,8 +670,9 @@ function extractTaskOutputUrl(data) {
   for (const arr of arrays) {
     const list = Array.isArray(arr) ? arr : [];
     for (const item of list) {
-      const value = typeof item === 'string' ? item : (item?.url || item?.video_url || item?.output_url);
+      const value = typeof item === 'string' ? item : (item?.url || item?.video_url || item?.output_url || item?.output);
       if (typeof value === 'string' && /^https?:\/\//i.test(value)) return value;
+      if (typeof item?.data?.output === 'string' && /^https?:\/\//i.test(item.data.output)) return item.data.output;
     }
   }
   return '';
@@ -1138,7 +1146,8 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     const mediaUpstreamKey = T8_MEDIA_API_KEY || apiKey;
-    const upstreamResp = await fetch(`${API_BASE_URL}/images/generations`, {
+    const imageBaseUrl = T8_MEDIA_API_KEY ? `${T8_MEDIA_API_BASE_URL}/v1` : API_BASE_URL;
+    const upstreamResp = await fetch(`${imageBaseUrl}/images/generations`, {
       method: 'POST',
       signal: controller.signal,
       headers: { Authorization: `Bearer ${mediaUpstreamKey}`, 'Content-Type': 'application/json' },
@@ -1238,10 +1247,10 @@ app.get('/api/media/tasks/:id', async (req, res) => {
     if (row.task_type === 'video' && !isFinalTaskStatus(row.status)) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 60000);
-      const upstreamResp = await fetch(`${VIDEO_API_BASE_URL}/v2/videos/generations/${encodeURIComponent(row.upstream_task_id)}`, {
+      const upstreamResp = await fetch(`${T8_MEDIA_API_BASE_URL}/v2/videos/generations/${encodeURIComponent(row.upstream_task_id)}`, {
         method: 'GET',
         signal: controller.signal,
-        headers: { Authorization: `Bearer ${apiKey}` }
+        headers: { Authorization: `Bearer ${T8_MEDIA_API_KEY || apiKey}` }
       }).finally(() => clearTimeout(timeout));
       const text = await upstreamResp.text();
       latest = parseJsonText(text);
@@ -1272,8 +1281,10 @@ app.get('/api/media/tasks', async (req, res) => {
     const apiKey = normalizeApiKey(req.query?.apiKey) || getRequestApiKey(req);
     await requireMediaApiKeyAccess(apiKey);
     const limit = Math.min(Math.max(Number(req.query?.limit || 20), 1), 100);
-    const rows = db.prepare('SELECT * FROM media_tasks WHERE api_key_hash = ? ORDER BY created_at DESC LIMIT ?').all(hashSecret(apiKey), limit);
-    const totalCost = db.prepare('SELECT COALESCE(SUM(cost), 0) AS cost FROM media_tasks WHERE api_key_hash = ? AND completed_at IS NOT NULL').get(hashSecret(apiKey)).cost || 0;
+    const taskKeyHashes = [hashSecret(apiKey)];
+    if (T8_MEDIA_API_KEY) taskKeyHashes.push(hashSecret(T8_MEDIA_API_KEY));
+    const rows = db.prepare(`SELECT * FROM media_tasks WHERE api_key_hash IN (${taskKeyHashes.map(() => '?').join(',')}) ORDER BY created_at DESC LIMIT ?`).all(...taskKeyHashes, limit);
+    const totalCost = db.prepare(`SELECT COALESCE(SUM(cost), 0) AS cost FROM media_tasks WHERE api_key_hash IN (${taskKeyHashes.map(() => '?').join(',')}) AND completed_at IS NOT NULL`).get(...taskKeyHashes).cost || 0;
     res.json({ ok: true, tasks: rows.map(publicTask), summary: { totalTasks: rows.length, completedFinalCost: Number(totalCost) }, policy: '只汇总已完成任务的最终 cost；运行中预扣不计入最终消耗。' });
   } catch (err) {
     const status = err.status || 500;

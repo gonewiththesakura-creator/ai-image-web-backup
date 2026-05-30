@@ -475,6 +475,26 @@
                 <textarea id="mediaPrompt" maxlength="4000" placeholder="例如：一只白色猫咪在雨夜霓虹街头奔跑，电影感，浅景深"></textarea>
                 <div class="grid2">
                   <div>
+                    <label for="mediaSize">图片比例</label>
+                    <select id="mediaSize">
+                      <option value="1024x1024">1:1 方图</option>
+                      <option value="1536x1152">4:3 横图</option>
+                      <option value="1152x1536">3:4 竖图</option>
+                      <option value="2048x1152">16:9 横图</option>
+                      <option value="1152x2048">9:16 竖图</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="mediaQuality">图片质量</label>
+                    <select id="mediaQuality">
+                      <option value="low">快速预览</option>
+                      <option value="auto" selected>标准/自动</option>
+                      <option value="high">高质量</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="grid2">
+                  <div>
                     <label for="mediaDuration">视频时长</label>
                     <select id="mediaDuration">
                       <option value="5">5 秒</option>
@@ -592,6 +612,8 @@
     const mediaVideoTab = $('mediaVideoTab');
     const refreshTasksBtn = $('refreshTasksBtn');
     const mediaPrompt = $('mediaPrompt');
+    const mediaSize = $('mediaSize');
+    const mediaQuality = $('mediaQuality');
     const mediaDuration = $('mediaDuration');
     const mediaAspect = $('mediaAspect');
     const submitMediaBtn = $('submitMediaBtn');
@@ -1415,6 +1437,8 @@
       if (!selectedMediaModel || !models.some((m) => m.id === selectedMediaModel)) selectedMediaModel = models[0]?.id || '';
       mediaImageTab.classList.toggle('active', mediaMode === 'image');
       mediaVideoTab.classList.toggle('active', mediaMode === 'video');
+      const imageControls = [mediaSize?.closest('div'), mediaQuality?.closest('div')];
+      imageControls.forEach((el) => { if (el) el.style.display = mediaMode === 'image' ? 'block' : 'none'; });
       mediaDuration.closest('div').style.display = mediaMode === 'video' ? 'block' : 'none';
       mediaAspect.closest('div').style.display = mediaMode === 'video' ? 'block' : 'none';
       submitMediaBtn.textContent = mediaMode === 'video' ? '提交视频任务' : '提交图片生成';
@@ -1454,7 +1478,7 @@
         const endpoint = mediaMode === 'video' ? MEDIA_VIDEO_ENDPOINT : MEDIA_IMAGE_ENDPOINT;
         const payload = mediaMode === 'video'
           ? { apiKey, model: selectedMediaModel, prompt, duration: Number(mediaDuration.value), aspect_ratio: mediaAspect.value }
-          : { apiKey, model: selectedMediaModel, prompt, size: $('sizePreset').value, format: $('format').value, quality: $('clarity').value === '720p' ? 'low' : 'auto', n: 1 };
+          : { apiKey, model: selectedMediaModel, prompt, size: mediaSize.value || $('sizePreset').value, format: $('format').value, quality: mediaQuality.value || 'auto', n: 1 };
         const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(data.error || '接口调用失败');
@@ -1530,7 +1554,7 @@ ${escapeHtml(task.updatedAt)}</pre>
       const endpoint = mediaMode === 'video' ? '/api/media/videos/generations' : '/api/media/images/generations';
       const payload = mediaMode === 'video'
         ? { apiKey, model: selectedMediaModel || 'wanx2.1-t2v-turbo', prompt, duration: Number(mediaDuration.value), aspect_ratio: mediaAspect.value }
-        : { apiKey, model: selectedMediaModel || 'gpt-image-1', prompt, size: $('sizePreset').value, format: $('format').value, n: 1 };
+        : { apiKey, model: selectedMediaModel || 'gpt-image-1', prompt, size: mediaSize.value || $('sizePreset').value, quality: mediaQuality.value || 'auto', format: $('format').value, n: 1 };
       const text = `curl -X POST ${location.origin}${endpoint} -H 'Content-Type: application/json' -d '${JSON.stringify(payload).replace(/'/g, "'\''")}'`;
       navigator.clipboard?.writeText(text).then(() => setMediaStatus('接口示例已复制。', 'ok')).catch(() => setMediaStatus(text));
     }
