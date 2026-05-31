@@ -521,13 +521,13 @@
                   <div>
                     <label for="mediaSize">图片规格</label>
                     <select id="mediaSize">
-                      <option value="1024x1024">1K 方图 · 0.4 点</option>
-                      <option value="2048x1152">2K 横图 · 0.8 点</option>
-                      <option value="1152x2048">2K 竖图 · 0.8 点</option>
-                      <option value="2048x2048">2K 方图 · 0.8 点</option>
-                      <option value="3840x2160">4K 横图 · 1.2 点</option>
-                      <option value="2160x3840">4K 竖图 · 1.2 点</option>
-                      <option value="3840x3840">4K 方图 · 1.2 点</option>
+                      <option value="1024x1024" data-tier="1K" data-name="1K 方图">1K 方图</option>
+                      <option value="2048x1152" data-tier="2K" data-name="2K 横图">2K 横图</option>
+                      <option value="1152x2048" data-tier="2K" data-name="2K 竖图">2K 竖图</option>
+                      <option value="2048x2048" data-tier="2K" data-name="2K 方图">2K 方图</option>
+                      <option value="3840x2160" data-tier="4K" data-name="4K 横图">4K 横图</option>
+                      <option value="2160x3840" data-tier="4K" data-name="4K 竖图">4K 竖图</option>
+                      <option value="3840x3840" data-tier="4K" data-name="4K 方图">4K 方图</option>
                     </select>
                   </div>
                   <div>
@@ -1613,6 +1613,35 @@
       </div>`;
     }
 
+    function formatDreamPoints(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return '-';
+      return n.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+    }
+
+    function selectedMediaModelItem() {
+      return activeMediaModels().find((m) => m.id === selectedMediaModel) || null;
+    }
+
+    function mediaImagePriceForSize(model, size) {
+      const item = model || selectedMediaModelItem();
+      if (!item?.pricing) return item?.estimatedDreamPoints;
+      const option = Array.from(mediaSize?.options || []).find((opt) => opt.value === size) || mediaSize?.selectedOptions?.[0];
+      const tier = option?.dataset?.tier || '1K';
+      return item.pricing[tier] ?? item.estimatedDreamPoints;
+    }
+
+    function updateMediaSizePriceLabels() {
+      if (!mediaSize || mediaMode !== 'image') return;
+      const model = selectedMediaModelItem();
+      Array.from(mediaSize.options).forEach((opt) => {
+        const label = opt.dataset.name || opt.textContent.split(' · ')[0];
+        const tier = opt.dataset.tier || '1K';
+        const price = model?.pricing?.[tier];
+        opt.textContent = Number.isFinite(Number(price)) ? `${label} · ${formatDreamPoints(price)} 点` : label;
+      });
+    }
+
     function activeMediaModels() {
       return mediaMode === 'video' ? (mediaModels.video || []) : (mediaModels.image || []);
     }
@@ -1629,13 +1658,23 @@
       mediaDuration.closest('div').style.display = mediaMode === 'video' ? 'block' : 'none';
       mediaAspect.closest('div').style.display = mediaMode === 'video' ? 'block' : 'none';
       submitMediaBtn.textContent = mediaMode === 'video' ? '提交视频任务' : '提交图片生成';
-      mediaModelList.innerHTML = models.map((m) => `
+      updateMediaSizePriceLabels();
+      mediaModelList.innerHTML = models.map((m) => {
+        const imagePrice = mediaMode === 'image' ? mediaImagePriceForSize(m, mediaSize?.value || '1024x1024') : null;
+        const priceText = mediaMode === 'image' && Number.isFinite(Number(imagePrice))
+          ? `${formatDreamPoints(imagePrice)} 点/张起`
+          : `${formatDreamPoints(m.estimatedDreamPoints)} 点/${m.unit}`;
+        const tierText = mediaMode === 'image' && m.pricing
+          ? `1K ${formatDreamPoints(m.pricing['1K'])} · 2K ${formatDreamPoints(m.pricing['2K'])} · 4K ${formatDreamPoints(m.pricing['4K'])} 点`
+          : (m.note || '');
+        return `
         <button type="button" class="model-option ${m.id === selectedMediaModel ? 'active' : ''}" data-media-model="${escapeHtml(m.id)}">
-          <strong>${escapeHtml(m.name)} · ${escapeHtml(m.estimatedDreamPoints)} 点/${escapeHtml(m.unit)}</strong>
+          <strong>${escapeHtml(m.name)} · ${escapeHtml(priceText)}</strong>
           <span>${escapeHtml(m.id)}</span>
-          <span>${escapeHtml(m.note || '')}</span>
+          <span>${escapeHtml(tierText)}</span>
         </button>
-      `).join('') || '<div class="small-note">暂无可用模型。</div>';
+      `;
+      }).join('') || '<div class="small-note">暂无可用模型。</div>';
     }
 
     async function loadMediaModels() {
@@ -1793,6 +1832,7 @@
       selectedMediaModel = btn.dataset.mediaModel;
       renderMediaModels();
     });
+    mediaSize?.addEventListener('change', renderMediaModels);
     submitMediaBtn.onclick = submitMediaTask;
     mediaTaskList.addEventListener('click', (ev) => {
       const btn = ev.target.closest('[data-poll-task]');

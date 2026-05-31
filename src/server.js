@@ -594,7 +594,18 @@ const MEDIA_VIDEO_MODELS = [
 ];
 
 const MEDIA_MODEL_MAP = new Map([...MEDIA_IMAGE_MODELS, ...MEDIA_VIDEO_MODELS].map((item) => [item.id, item]));
-const MEDIA_IMAGE_PRICING = Object.fromEntries(MEDIA_IMAGE_MODELS.map((model) => [model.id, { base: 0.40, min: 0.40 }]));
+const MEDIA_IMAGE_BASE_PRICES = {
+  'qwen-image': 0.50,
+  'flux-schnell': 0.80,
+  'flux-kontext-pro': 0.80,
+  'flux-kontext-max': 0.80,
+  'flux-dev': 0.80,
+  'flux-pro': 0.80
+};
+const MEDIA_IMAGE_PRICING = Object.fromEntries(MEDIA_IMAGE_MODELS.map((model) => {
+  const base = MEDIA_IMAGE_BASE_PRICES[model.id] ?? 0.40;
+  return [model.id, { base, min: base }];
+}));
 const MEDIA_SIZE_MULTIPLIERS = {
   '1024x1024': 1,
   '1536x1152': 1,
@@ -1456,7 +1467,15 @@ app.get('/api/media/models', (req, res) => {
   res.json({
     ok: true,
     policy: '客户侧仅展示 DreamApi 自有能力档位；实际消耗以接口返回 usage/cost 或异步任务最终状态为准。',
-    image: MEDIA_IMAGE_MODELS.filter((item) => item.enabled),
+    image: MEDIA_IMAGE_MODELS.filter((item) => item.enabled).map((item) => ({
+      ...item,
+      estimatedDreamPoints: calculateMediaImagePrice(item.id, '1024x1024', 'auto', 1),
+      pricing: {
+        '1K': calculateMediaImagePrice(item.id, '1024x1024', 'auto', 1),
+        '2K': calculateMediaImagePrice(item.id, '2048x2048', 'auto', 1),
+        '4K': calculateMediaImagePrice(item.id, '3840x3840', 'auto', 1)
+      }
+    })),
     video: MEDIA_VIDEO_MODELS.filter((item) => item.enabled)
   });
 });

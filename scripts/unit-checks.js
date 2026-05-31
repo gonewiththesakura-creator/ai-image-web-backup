@@ -118,8 +118,10 @@ for (const id of expectedVideoModels) {
   assert.equal(MEDIA_VIDEO_PRICING[id].hold, MEDIA_VIDEO_PRICING[id].price, `${id} hold and final price should match fixed-price billing`);
   assert.equal(normalizeMediaModel(id, 'video'), id, `${id} should normalize to itself while enabled`);
 }
-assert.equal(calculateMediaImagePrice('qwen-image', '1024x1024', 'low', 1), 0.40, 'image 1K/low should use the 1x floor price, with no quality discount');
-assert.equal(calculateMediaImagePrice('flux-schnell', '1024x1024', 'high', 1), 0.40, 'image 1K/high should not add a quality surcharge');
+assert.equal(calculateMediaImagePrice('qwen-image', '1024x1024', 'low', 1), 0.50, 'qwen image 1K floor price should be 0.5 Dream points');
+assert.equal(calculateMediaImagePrice('qwen-image', '2048x2048', 'auto', 1), 1.00, 'qwen image 2K should scale from the 0.5 floor price');
+assert.equal(calculateMediaImagePrice('flux-schnell', '1024x1024', 'high', 1), 0.80, 'flux image 1K floor price should be 0.8 Dream points and ignore high quality labels');
+assert.equal(calculateMediaImagePrice('flux-kontext-pro', '3840x2160', 'auto', 1), 2.40, 'flux 4K pricing should scale from the 0.8 floor price');
 assert.equal(calculateMediaImagePrice('gpt-image-2', '1024x1024', 'low', 1), 0.40, 'flagship image2 1K anchor price should be 0.4 Dream points');
 assert.equal(calculateMediaImagePrice('gpt-image-2', '2048x2048', 'high', 1), 0.80, 'flagship image2 2K anchor price should be 0.8 Dream points and ignore high quality labels');
 assert.equal(calculateMediaImagePrice('gpt-image-2', '3840x3840', 'auto', 1), 1.20, 'flagship image2 4K anchor price should be 1.2 Dream points');
