@@ -241,7 +241,8 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'blob:', 'https:', 'http:'],
-      connectSrc: ["'self'"],
+      mediaSrc: ["'self'", 'https:', 'http:'],
+      connectSrc: ["'self'", 'https:', 'http:'],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       formAction: ["'self'"]
@@ -985,19 +986,16 @@ function publicTask(row) {
   if (!row) return null;
   return {
     id: row.id,
-    upstreamTaskId: row.upstream_task_id,
     type: row.task_type,
     model: row.model,
+    prompt: row.prompt || '',
     status: row.status,
-    cost: row.cost === null || row.cost === undefined ? null : Number(row.cost),
-    usage: row.usage_json ? parseJsonText(row.usage_json) : null,
     outputUrl: row.output_url || '',
+    videoUrl: row.task_type === 'video' && row.output_url ? `/api/media/videos/proxy?taskId=${encodeURIComponent(row.id)}` : '',
+    downloadUrl: row.task_type === 'video' && row.output_url ? row.output_url : '',
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
-    completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
-    salePrice: row.sale_price === null || row.sale_price === undefined ? null : Number(row.sale_price),
-    holdAmount: row.hold_amount === null || row.hold_amount === undefined ? null : Number(row.hold_amount),
-    billingStatus: row.billing_status || 'UNBILLED'
+    completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null
   };
 }
 
@@ -1542,12 +1540,51 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
       INSERT INTO media_tasks (id, upstream_task_id, provider, task_type, model, prompt, status, cost, usage_json, response_json, output_url, api_base_hash, api_key_hash, created_at, updated_at, completed_at, user_id, api_key_id, sale_price, hold_amount, billing_status)
       VALUES (?, ?, 'compatible', 'video', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
     `).run(id, upstreamTaskId, model, prompt, status, cost, data?.usage ? JSON.stringify(data.usage) : null, JSON.stringify(data).slice(0, 20000), outputUrl, hashSecret(T8_MEDIA_API_BASE_URL), hashSecret(mediaUpstreamKey), now, now, isFinalTaskStatus(status) ? now : null, String(access.userId), String(access.keyId), pricing.price, pricing.hold);
-    res.status(202).json({ ok: true, task: publicTask(db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(id)), billing: { pendingCharge: pricing.price, policy: '最终 SUCCESS 后扣费，失败/取消不扣费。' }, access, upstream: data });
+    res.status(202).json({ ok: true, task: publicTask(db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(id)), message: '视频已提交，生成成功后才扣费。' });
   } catch (err) {
     console.error('[media-video-submit] error:', { name: err?.name, message: err?.message });
     if (err.name === 'AbortError') return res.status(504).json({ error: '视频任务提交超时。' });
     const status = err.status || 500;
     res.status(status).json({ error: status >= 500 ? '视频任务接口错误。' : err.message });
+  }
+});
+
+
+app.get('/api/media/videos/proxy', async (req, res) => {
+  try {
+    const apiKey = normalizeApiKey(req.query?.apiKey) || getRequestApiKey(req);
+    await requireMediaApiKeyAccess(apiKey);
+    const taskId = String(req.query?.taskId || '').slice(0, 120);
+    const row = db.prepare('SELECT * FROM media_tasks WHERE id = ? OR upstream_task_id = ?').get(taskId, taskId);
+    if (!row || row.task_type !== 'video') throw publicError(404, '视频不存在。');
+    if (row.api_key_hash !== hashSecret(T8_MEDIA_API_KEY || apiKey) && row.api_key_hash !== hashSecret(apiKey)) throw publicError(403, '该 API Key 无权查看此视频。');
+    if (row.status !== 'SUCCESS' || !row.output_url) throw publicError(404, '视频还未生成完成。');
+
+    const range = String(req.headers.range || '');
+    const upstreamResp = await fetch(row.output_url, {
+      method: 'GET',
+      headers: range ? { Range: range } : undefined
+    });
+    if (!upstreamResp.ok && upstreamResp.status !== 206) {
+      return res.status(502).json({ error: '视频文件暂时无法访问，请稍后重试。' });
+    }
+    res.status(upstreamResp.status === 206 ? 206 : 200);
+    const headersToCopy = ['content-type', 'content-length', 'content-range', 'accept-ranges', 'cache-control', 'last-modified', 'etag'];
+    for (const name of headersToCopy) {
+      const value = upstreamResp.headers.get(name);
+      if (value) res.setHeader(name, value);
+    }
+    res.setHeader('Content-Type', upstreamResp.headers.get('content-type') || 'video/mp4');
+    res.setHeader('Accept-Ranges', upstreamResp.headers.get('accept-ranges') || 'bytes');
+    res.setHeader('Content-Disposition', `inline; filename="dreamapi-video-${row.id}.mp4"`);
+    if (!upstreamResp.body) return res.end();
+    for await (const chunk of upstreamResp.body) {
+      res.write(chunk);
+    }
+    res.end();
+  } catch (err) {
+    const status = err.status || 500;
+    res.status(status).json({ error: status >= 500 ? '视频读取失败，请稍后重试。' : err.message });
   }
 });
 
@@ -1587,7 +1624,7 @@ app.get('/api/media/tasks/:id', async (req, res) => {
     if (fresh?.billing_status === 'PENDING' && isFinalTaskStatus(fresh.status)) await ensureMediaBalance(access, fresh.sale_price || calculateMediaVideoPrice(fresh.model).price);
     const billing = await settleVideoBilling(fresh, latest);
     const billedFresh = db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(row.id);
-    res.json({ ok: true, task: publicTask(billedFresh), billing, finalCostPolicy: '视频任务仅在最终 SUCCESS 后按 DreamApi 固定售价扣费；失败/取消不扣费；T8 cost 只记录为上游成本。', upstream: latest });
+    res.json({ ok: true, task: publicTask(billedFresh), message: billedFresh.status === 'SUCCESS' ? '视频生成成功。' : (['FAILURE', 'CANCELED'].includes(billedFresh.status) ? '视频生成失败，未扣费。' : '视频生成中。') });
   } catch (err) {
     console.error('[media-task] error:', { name: err?.name, message: err?.message });
     if (err.name === 'AbortError') return res.status(504).json({ error: '任务查询超时。' });
@@ -1604,8 +1641,7 @@ app.get('/api/media/tasks', async (req, res) => {
     const taskKeyHashes = [hashSecret(apiKey)];
     if (T8_MEDIA_API_KEY) taskKeyHashes.push(hashSecret(T8_MEDIA_API_KEY));
     const rows = db.prepare(`SELECT * FROM media_tasks WHERE api_key_hash IN (${taskKeyHashes.map(() => '?').join(',')}) ORDER BY created_at DESC LIMIT ?`).all(...taskKeyHashes, limit);
-    const totalCost = db.prepare(`SELECT COALESCE(SUM(cost), 0) AS cost FROM media_tasks WHERE api_key_hash IN (${taskKeyHashes.map(() => '?').join(',')}) AND completed_at IS NOT NULL`).get(...taskKeyHashes).cost || 0;
-    res.json({ ok: true, tasks: rows.map(publicTask), summary: { totalTasks: rows.length, completedFinalCost: Number(totalCost) }, policy: '只汇总已完成任务的最终 cost；运行中预扣不计入最终消耗。' });
+    res.json({ ok: true, tasks: rows.map(publicTask) });
   } catch (err) {
     const status = err.status || 500;
     res.status(status).json({ error: status >= 500 ? '任务列表接口错误。' : err.message });

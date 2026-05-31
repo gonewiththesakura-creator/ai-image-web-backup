@@ -198,7 +198,7 @@
     .media-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
     .media-tabs button { background: rgba(36,33,29,.045); border: 1px solid var(--line); color: var(--muted); box-shadow: none; }
     .media-tabs button.active { background: #24211d; color: #fffaf2; }
-    .media-grid { display: grid; grid-template-columns: minmax(320px, 420px) minmax(0, 1fr); gap: 18px; align-items: start; }
+    .media-grid { display: grid; grid-template-columns: minmax(320px, 440px) minmax(0, 1fr); gap: 18px; align-items: start; }
     .media-box { border: 1px solid var(--line); border-radius: 24px; background: rgba(255,253,249,.70); padding: 16px; }
     .media-model-list { display: grid; gap: 10px; max-height: 360px; overflow: auto; padding-right: 3px; }
     .model-option { width: 100%; display: block; text-align: left; border: 1px solid var(--line); background: rgba(250,247,241,.72); color: var(--text); border-radius: 18px; padding: 12px; box-shadow: none; }
@@ -213,6 +213,23 @@
     .task-item { border: 1px solid var(--line); border-radius: 18px; padding: 12px; background: rgba(255,255,255,.58); color: var(--text); }
     .task-item strong { display: block; font-size: 13px; margin-bottom: 5px; }
     .task-item pre { margin: 8px 0 0; white-space: pre-wrap; word-break: break-all; font-size: 11px; color: var(--muted); }
+    .media-api-key-row { display: flex; gap: 10px; align-items: stretch; }
+    .media-api-key-row input { flex: 1; }
+    .media-api-key-row button { white-space: nowrap; }
+    .media-history-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 0 12px; }
+    .media-history-head h3 { margin: 0; font-size: 16px; }
+    .media-history-toggle { padding: 8px 12px; font-size: 12px; }
+    .media-progress { display: none; margin-top: 12px; }
+    .media-progress.show { display: block; }
+    .media-result-card { border: 1px solid var(--line); border-radius: 22px; background: rgba(250,247,241,.66); padding: 12px; margin-top: 12px; }
+    .media-result-card strong { display: block; margin-bottom: 8px; font-size: 14px; }
+    .media-result-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .media-result-actions a, .media-result-actions button { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 9px 13px; font-size: 13px; text-decoration: none; border: 1px solid var(--line); background: rgba(255,255,255,.75); color: var(--text); }
+    .media-history-list.collapsed { display: none; }
+    .task-item .history-title { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+    .task-item .history-title span { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .task-item .history-prompt { color: var(--muted); font-size: 12px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .task-item video, .task-item img { width: 100%; border-radius: 14px; margin-top: 9px; border: 1px solid var(--line); }
     .media-output { margin-top: 12px; }
     .media-output img, .media-output video { width: 100%; border-radius: 18px; border: 1px solid var(--line); background: #eee6dc; }
     .chat-card { padding: 0; min-height: 560px; max-height: min(760px, calc(100vh - 190px)); overflow: hidden; display: grid; grid-template-columns: 260px minmax(0, 1fr); }
@@ -460,18 +477,24 @@
             <div class="media-head">
               <div>
                 <h2>媒体创作</h2>
-                <p>使用 9999 媒体套餐 API Key 生成图片和提交视频任务；任务会记录状态、结果链接与最终 cost。</p>
+                <p>图片和视频独立创作。视频提交后等待进度完成，成功显示预览；失败不扣费。</p>
               </div>
               <div class="pill">Image + Video Studio</div>
             </div>
             <div class="media-tabs">
-              <button id="mediaImageTab" type="button" class="active">图片接口</button>
-              <button id="mediaVideoTab" type="button">视频任务</button>
-              <button id="refreshTasksBtn" type="button" class="secondary">刷新任务</button>
+              <button id="mediaImageTab" type="button" class="active">做图片</button>
+              <button id="mediaVideoTab" type="button">做视频</button>
             </div>
             <div class="media-grid">
               <div class="media-box">
-                <label for="mediaPrompt">媒体描述</label>
+                <label for="mediaApiKey">媒体创作 API Key</label>
+                <div class="media-api-key-row">
+                  <input id="mediaApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="请输入媒体套餐 API Key" />
+                  <button id="syncMediaKeyBtn" type="button" class="secondary">沿用作图 Key</button>
+                </div>
+                <div class="hint">媒体创作使用单独的 API Key 输入框，和普通 gpt 作画分开保存。</div>
+
+                <label for="mediaPrompt">创作描述</label>
                 <textarea id="mediaPrompt" maxlength="4000" placeholder="例如：一只白色猫咪在雨夜霓虹街头奔跑，电影感，浅景深"></textarea>
                 <div class="grid2">
                   <div>
@@ -512,17 +535,23 @@
                   </div>
                 </div>
                 <div class="media-actions">
-                  <button id="submitMediaBtn" type="button">提交媒体任务</button>
-                  <button id="copyApiExampleBtn" type="button" class="secondary">复制接口示例</button>
+                  <button id="submitMediaBtn" type="button">开始生成</button>
+                </div>
+                <div id="mediaProgress" class="media-progress">
+                  <div class="progress-meta"><span id="mediaProgressText">准备提交...</span><span id="mediaProgressNum">0%</span></div>
+                  <div class="progress-track"><div id="mediaProgressBar" class="progress-bar"></div></div>
                 </div>
                 <div id="mediaStatus" class="media-status"></div>
                 <div id="mediaOutput" class="media-output"></div>
               </div>
               <div class="media-box">
-                <h3 style="margin:0 0 12px;font-size:16px;">能力档位</h3>
+                <h3 style="margin:0 0 12px;font-size:16px;">选择能力</h3>
                 <div id="mediaModelList" class="media-model-list"></div>
-                <h3 style="margin:18px 0 12px;font-size:16px;">任务与消耗</h3>
-                <div id="mediaTaskList" class="task-list"></div>
+                <div class="media-history-head">
+                  <h3>今日记录</h3>
+                  <button id="toggleMediaHistoryBtn" type="button" class="secondary media-history-toggle">展开</button>
+                </div>
+                <div id="mediaTaskList" class="task-list media-history-list collapsed"></div>
               </div>
             </div>
           </section>
@@ -610,14 +639,19 @@
     const sendChatBtn = $('sendChatBtn');
     const mediaImageTab = $('mediaImageTab');
     const mediaVideoTab = $('mediaVideoTab');
-    const refreshTasksBtn = $('refreshTasksBtn');
+    const mediaApiKey = $('mediaApiKey');
+    const syncMediaKeyBtn = $('syncMediaKeyBtn');
+    const toggleMediaHistoryBtn = $('toggleMediaHistoryBtn');
+    const mediaProgress = $('mediaProgress');
+    const mediaProgressBar = $('mediaProgressBar');
+    const mediaProgressNum = $('mediaProgressNum');
+    const mediaProgressText = $('mediaProgressText');
     const mediaPrompt = $('mediaPrompt');
     const mediaSize = $('mediaSize');
     const mediaQuality = $('mediaQuality');
     const mediaDuration = $('mediaDuration');
     const mediaAspect = $('mediaAspect');
     const submitMediaBtn = $('submitMediaBtn');
-    const copyApiExampleBtn = $('copyApiExampleBtn');
     const mediaStatus = $('mediaStatus');
     const mediaOutput = $('mediaOutput');
     const mediaModelList = $('mediaModelList');
@@ -652,6 +686,8 @@
     let mediaMode = 'image';
     let mediaModels = { image: [], video: [] };
     let selectedMediaModel = '';
+    let mediaProgressTimer = null;
+    let mediaHistoryExpanded = false;
 
     function defaultChatTitle() {
       return '新会话';
@@ -1020,6 +1056,8 @@
 
     const savedKey = localStorage.getItem('dreamapi_image_key');
     if (savedKey) $('apiKey').value = savedKey;
+    const savedMediaKey = localStorage.getItem('dreamapi_media_key');
+    if (savedMediaKey && mediaApiKey) mediaApiKey.value = savedMediaKey;
 
     function trackEvent(name, data = {}) {
       try {
@@ -1428,6 +1466,62 @@
       mediaStatus.textContent = text;
     }
 
+    function setMediaProgress(percent, text) {
+      const p = Math.max(0, Math.min(100, Math.round(percent)));
+      mediaProgress.classList.add('show');
+      mediaProgressBar.style.width = `${p}%`;
+      mediaProgressNum.textContent = `${p}%`;
+      if (text) mediaProgressText.textContent = text;
+    }
+
+    function startMediaProgress(text = '正在生成，请保持页面打开...') {
+      clearInterval(mediaProgressTimer);
+      let p = 8;
+      setMediaProgress(p, text);
+      mediaProgressTimer = setInterval(() => {
+        if (p < 45) p += 3;
+        else if (p < 78) p += 1;
+        else if (p < 96) p += Math.random() < 0.35 ? 1 : 0;
+        setMediaProgress(p, '正在生成，请保持页面打开...');
+      }, 1600);
+    }
+
+    function finishMediaProgress(ok, text) {
+      clearInterval(mediaProgressTimer);
+      setMediaProgress(100, text || (ok ? '生成完成' : '生成结束'));
+      setTimeout(() => {
+        mediaProgress.classList.remove('show');
+        mediaProgressBar.style.width = '0%';
+        mediaProgressNum.textContent = '0%';
+      }, 1800);
+    }
+
+    function todayMediaTasks(tasks) {
+      const today = new Date().toDateString();
+      return (tasks || []).filter((task) => new Date(task.createdAt).toDateString() === today);
+    }
+
+
+    function mediaVideoSrc(task) {
+      const proxy = task.videoUrl || (task.id ? `${MEDIA_TASKS_ENDPOINT.replace('/tasks', '/videos/proxy')}?taskId=${encodeURIComponent(task.id)}` : '');
+      const apiKey = (mediaApiKey.value || '').trim();
+      return proxy ? `${proxy}${proxy.includes('?') ? '&' : '?'}apiKey=${encodeURIComponent(apiKey)}` : '';
+    }
+
+    function renderVideoResult(task, title = '视频生成成功') {
+      const src = mediaVideoSrc(task);
+      const direct = task.downloadUrl || task.outputUrl || '';
+      if (!src) return '';
+      return `<div class="media-result-card">
+        <strong>${escapeHtml(title)}</strong>
+        <video src="${escapeHtml(src)}" controls playsinline preload="metadata"></video>
+        <div class="media-result-actions">
+          <a href="${escapeHtml(src)}" target="_blank" rel="noreferrer">打开视频</a>
+          ${direct ? `<a href="${escapeHtml(direct)}" target="_blank" rel="noreferrer">备用下载</a>` : ''}
+        </div>
+      </div>`;
+    }
+
     function activeMediaModels() {
       return mediaMode === 'video' ? (mediaModels.video || []) : (mediaModels.image || []);
     }
@@ -1465,15 +1559,16 @@
     }
 
     async function submitMediaTask() {
-      const apiKey = $('apiKey').value.trim();
-      const prompt = mediaPrompt.value.trim() || $('prompt').value.trim();
-      if (!apiKey) { setMediaStatus('请先在顶部 API Key 输入框填入 9999 媒体套餐 API Key。', 'error'); return; }
-      if (!prompt) { setMediaStatus('请输入媒体描述。', 'error'); mediaPrompt.focus(); return; }
-      if (!selectedMediaModel) { setMediaStatus('请选择一个能力档位。', 'error'); return; }
-      localStorage.setItem('dreamapi_image_key', apiKey);
+      const apiKey = (mediaApiKey.value || '').trim();
+      const prompt = mediaPrompt.value.trim();
+      if (!apiKey) { setMediaStatus('请输入媒体创作 API Key。', 'error'); mediaApiKey.focus(); return; }
+      if (!prompt) { setMediaStatus(mediaMode === 'video' ? '请输入视频描述。' : '请输入图片描述。', 'error'); mediaPrompt.focus(); return; }
+      if (!selectedMediaModel) { setMediaStatus('请选择一个能力。', 'error'); return; }
+      localStorage.setItem('dreamapi_media_key', apiKey);
       submitMediaBtn.disabled = true;
-      setMediaStatus(mediaMode === 'video' ? '正在提交视频任务...' : '正在调用图片生成接口...');
       mediaOutput.innerHTML = '';
+      startMediaProgress(mediaMode === 'video' ? '视频已提交，正在生成...' : '图片生成中...');
+      setMediaStatus(mediaMode === 'video' ? '视频生成中...' : '图片生成中...');
       try {
         const endpoint = mediaMode === 'video' ? MEDIA_VIDEO_ENDPOINT : MEDIA_IMAGE_ENDPOINT;
         const payload = mediaMode === 'video'
@@ -1481,23 +1576,24 @@
           : { apiKey, model: selectedMediaModel, prompt, size: mediaSize.value || $('sizePreset').value, format: $('format').value, quality: mediaQuality.value || 'auto', n: 1 };
         const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(data.error || '接口调用失败');
+        if (!resp.ok) throw new Error(data.error || '生成失败，请稍后重试。');
         if (mediaMode === 'video') {
           const task = data.task || {};
-          setMediaStatus(`视频任务已提交：${task.id || task.upstreamTaskId}
-状态：${task.status}
-请等待最终 SUCCESS/FAILURE 后查看真实 cost。`, 'ok');
+          setMediaStatus('视频生成中...');
           await refreshMediaTasks();
-          pollMediaTask(task.id || task.upstreamTaskId);
+          await pollMediaTask(task.id || task.upstreamTaskId);
         } else {
           const images = data.images || [];
+          if (!images.length) throw new Error('没有返回图片，请稍后重试。');
           renderImages(images);
-          switchView('draw');
-          mediaOutput.innerHTML = images[0] ? `<img src="${escapeHtml(imageSrc(images[0]))}" alt="媒体接口图片结果" />` : '';
-          setMediaStatus(data.message || `图片生成完成，已返回 ${images.length} 张图片。`, 'ok');
+          mediaOutput.innerHTML = images[0] ? `<div class="media-result-card"><strong>生成成功</strong><img src="${escapeHtml(imageSrc(images[0]))}" alt="媒体图片结果" /></div>` : '';
+          finishMediaProgress(true, '生成完成');
+          setMediaStatus('图片生成成功。', 'ok');
+          await refreshMediaTasks();
         }
       } catch (err) {
-        setMediaStatus(err.message || '媒体接口调用失败。', 'error');
+        finishMediaProgress(false, '生成失败');
+        setMediaStatus(err.message || '生成失败，请稍后重试。', 'error');
       } finally {
         submitMediaBtn.disabled = false;
       }
@@ -1505,62 +1601,84 @@
 
     async function pollMediaTask(taskId) {
       if (!taskId) return;
-      const apiKey = $('apiKey').value.trim();
-      const finalStatuses = new Set(['SUCCESS', 'FAILURE', 'CANCELED']);
+      const apiKey = (mediaApiKey.value || '').trim();
       for (let i = 0; i < 60; i += 1) {
         await new Promise((resolve) => setTimeout(resolve, i < 6 ? 5000 : 10000));
         try {
           const resp = await fetch(`${MEDIA_TASKS_ENDPOINT}/${encodeURIComponent(taskId)}?apiKey=${encodeURIComponent(apiKey)}`);
           const data = await resp.json().catch(() => ({}));
-          if (!resp.ok) throw new Error(data.error || '任务查询失败');
+          if (!resp.ok) throw new Error(data.error || '查询失败，请稍后重试。');
           const task = data.task || {};
-          setMediaStatus(`视频任务状态：${task.status}\n最终 cost：${task.cost ?? '等待最终结算'}${task.outputUrl ? `\n结果：${task.outputUrl}` : ''}`, finalStatuses.has(task.status) ? (task.status === 'SUCCESS' ? 'ok' : 'error') : '');
-          if (task.outputUrl) mediaOutput.innerHTML = `<video src="${escapeHtml(task.outputUrl)}" controls playsinline></video>`;
+          const status = String(task.status || '').toUpperCase();
+          if (task.outputUrl) {
+            mediaOutput.innerHTML = renderVideoResult(task);
+          }
           await refreshMediaTasks();
-          if (finalStatuses.has(task.status)) return;
+          if (status === 'SUCCESS') {
+            finishMediaProgress(true, '生成完成');
+            setMediaStatus('视频生成成功。', 'ok');
+            return;
+          }
+          if (status === 'FAILURE' || status === 'CANCELED') {
+            finishMediaProgress(false, '生成失败');
+            setMediaStatus('视频生成失败，未扣费。', 'error');
+            return;
+          }
+          setMediaStatus('视频生成中...');
         } catch (err) {
-          setMediaStatus(err.message || '任务轮询失败。', 'error');
+          finishMediaProgress(false, '查询失败');
+          setMediaStatus(err.message || '查询失败，请稍后重试。', 'error');
           return;
         }
       }
+      setMediaStatus('视频还在生成中，稍后可在今日记录里继续查看。');
     }
 
     async function refreshMediaTasks() {
-      const apiKey = $('apiKey').value.trim();
-      if (!apiKey) { mediaTaskList.innerHTML = '<div class="small-note">输入 API Key 后显示最近任务。</div>'; return; }
+      const apiKey = (mediaApiKey.value || '').trim();
+      if (!apiKey) { mediaTaskList.innerHTML = '<div class="small-note">输入媒体创作 API Key 后显示今日记录。</div>'; return; }
       try {
-        const resp = await fetch(`${MEDIA_TASKS_ENDPOINT}?limit=20&apiKey=${encodeURIComponent(apiKey)}`);
+        const resp = await fetch(`${MEDIA_TASKS_ENDPOINT}?limit=50&apiKey=${encodeURIComponent(apiKey)}`);
         const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(data.error || '任务列表加载失败');
-        const tasks = data.tasks || [];
-        mediaTaskList.innerHTML = tasks.map((task) => `
-          <div class="task-item">
-            <strong>${escapeHtml(task.model)} · ${escapeHtml(task.status)} · cost ${task.cost ?? '未最终结算'}</strong>
-            ${task.outputUrl ? `<a href="${escapeHtml(task.outputUrl)}" target="_blank" rel="noreferrer">打开结果</a>` : ''}
-            <button type="button" class="secondary" style="margin-top:8px;padding:8px 11px;font-size:12px;" data-poll-task="${escapeHtml(task.id)}">查询/轮询</button>
-            <pre>${escapeHtml(task.id)}
-${escapeHtml(task.upstreamTaskId)}
-${escapeHtml(task.updatedAt)}</pre>
-          </div>
-        `).join('') || '<div class="small-note">暂无任务记录。</div>';
+        if (!resp.ok) throw new Error(data.error || '记录加载失败');
+        const tasks = todayMediaTasks(data.tasks || []);
+        mediaTaskList.innerHTML = tasks.map((task) => {
+          const isVideo = task.type === 'video';
+          const ok = task.status === 'SUCCESS';
+          const failed = task.status === 'FAILURE' || task.status === 'CANCELED';
+          const statusText = ok ? '成功' : (failed ? '失败' : '生成中');
+          return `
+            <div class="task-item">
+              <div class="history-title"><strong>${isVideo ? '视频' : '图片'} · ${escapeHtml(statusText)}</strong><span>${new Date(task.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span></div>
+              <div class="history-prompt">${escapeHtml(task.prompt || '')}</div>
+              ${task.outputUrl && isVideo ? renderVideoResult(task, '视频预览') : ''}
+              ${!ok && !failed && isVideo ? `<button type="button" class="secondary" style="margin-top:8px;padding:8px 11px;font-size:12px;" data-poll-task="${escapeHtml(task.id)}">查看进度</button>` : ''}
+            </div>
+          `;
+        }).join('') || '<div class="small-note">今天还没有媒体创作记录。</div>';
       } catch (err) {
-        mediaTaskList.innerHTML = `<div class="small-note">${escapeHtml(err.message || '任务加载失败')}</div>`;
+        mediaTaskList.innerHTML = `<div class="small-note">${escapeHtml(err.message || '记录加载失败')}</div>`;
       }
-    }
-
-    function copyApiExample() {
-      const apiKey = $('apiKey').value.trim() || 'YOUR_API_KEY';
-      const prompt = mediaPrompt.value.trim() || '一只白色猫咪在雨夜霓虹街头奔跑，电影感';
-      const endpoint = mediaMode === 'video' ? '/api/media/videos/generations' : '/api/media/images/generations';
-      const payload = mediaMode === 'video'
-        ? { apiKey, model: selectedMediaModel || 'wanx2.1-t2v-turbo', prompt, duration: Number(mediaDuration.value), aspect_ratio: mediaAspect.value }
-        : { apiKey, model: selectedMediaModel || 'gpt-image-1', prompt, size: mediaSize.value || $('sizePreset').value, quality: mediaQuality.value || 'auto', format: $('format').value, n: 1 };
-      const text = `curl -X POST ${location.origin}${endpoint} -H 'Content-Type: application/json' -d '${JSON.stringify(payload).replace(/'/g, "'\''")}'`;
-      navigator.clipboard?.writeText(text).then(() => setMediaStatus('接口示例已复制。', 'ok')).catch(() => setMediaStatus(text));
     }
 
     mediaImageTab.onclick = () => { mediaMode = 'image'; selectedMediaModel = ''; renderMediaModels(); };
     mediaVideoTab.onclick = () => { mediaMode = 'video'; selectedMediaModel = ''; renderMediaModels(); };
+    syncMediaKeyBtn.onclick = () => {
+      mediaApiKey.value = $('apiKey').value.trim();
+      if (mediaApiKey.value) {
+        localStorage.setItem('dreamapi_media_key', mediaApiKey.value);
+        setMediaStatus('已沿用普通作图 API Key。', 'ok');
+      } else {
+        setMediaStatus('普通作图 API Key 为空，请手动输入媒体创作 API Key。', 'error');
+      }
+    };
+    mediaApiKey.addEventListener('change', () => localStorage.setItem('dreamapi_media_key', mediaApiKey.value.trim()));
+    toggleMediaHistoryBtn.onclick = () => {
+      mediaHistoryExpanded = !mediaHistoryExpanded;
+      mediaTaskList.classList.toggle('collapsed', !mediaHistoryExpanded);
+      toggleMediaHistoryBtn.textContent = mediaHistoryExpanded ? '收起' : '展开';
+      if (mediaHistoryExpanded) refreshMediaTasks();
+    };
     mediaModelList.addEventListener('click', (ev) => {
       const btn = ev.target.closest('[data-media-model]');
       if (!btn) return;
@@ -1568,13 +1686,11 @@ ${escapeHtml(task.updatedAt)}</pre>
       renderMediaModels();
     });
     submitMediaBtn.onclick = submitMediaTask;
-    refreshTasksBtn.onclick = refreshMediaTasks;
     mediaTaskList.addEventListener('click', (ev) => {
       const btn = ev.target.closest('[data-poll-task]');
       if (!btn) return;
       pollMediaTask(btn.dataset.pollTask);
     });
-    copyApiExampleBtn.onclick = copyApiExample;
 
     viewTabs.forEach((tab) => tab.addEventListener('click', () => switchView(tab.dataset.viewTab)));
     window.addEventListener('hashchange', () => switchView(location.hash === '#gallery' ? 'gallery' : (location.hash === '#chat' ? 'chat' : (location.hash === '#media' ? 'media' : 'draw'))));
