@@ -559,7 +559,7 @@ function normalizeChatModel(value) {
 const MEDIA_IMAGE_MODELS = [
   { id: 'qwen-image', name: '通用作图', type: 'image', tier: 'standard', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 0.40, enabled: true, note: '实测可用，适合中文提示词与通用视觉。' },
   { id: 'gpt-image-1', name: '高级作图', type: 'image', tier: 'pro', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 0.40, enabled: true, note: '实测可用，适合复杂画面和高质量视觉。' },
-  { id: 'gpt-image-1-mini', name: '高级作图 Mini', type: 'image', tier: 'fast', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 0.40, enabled: true, note: '实测可用，返回 base64 图片，适合快速图像生成。' },
+  { id: 'gpt-image-1-mini', name: '高级作图 Mini', type: 'image', tier: 'fast', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 0.40, enabled: false, note: '成本偏高，暂不开放。' },
   { id: 'flux-schnell', name: 'Flux 极速作图', type: 'image', tier: 'fast', unit: '张', estimatedDreamPoints: 0.40, enabled: true, note: '实测可用，返回 base64 图片，速度较快。' },
   { id: 'dall-e-3', name: '经典标准作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 0.40, enabled: true, note: '复测可用，但出图较慢。' },
   { id: 'gpt-image-2', name: '旗舰作图', type: 'image', tier: 'ultra', unit: '张', estimatedDreamPoints: 0.40, enabled: true, note: '复测可用，但耗时较长，建议小范围使用。' },

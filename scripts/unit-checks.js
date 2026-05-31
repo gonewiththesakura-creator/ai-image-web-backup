@@ -75,7 +75,7 @@ assert.equal(resolveImageRequestSettings({ size: '2048x1152', outputMode: '2k' }
 assert.equal(resolveImageRequestSettings({ size: '1536x1152', outputMode: '4k', hasReferenceImages: true }).finalSize, '1024x1024', 'reference image mode should still force safe 1024x1024');
 assert.equal(resolveImageRequestSettings({ size: '4096x4096', outputMode: '4k', usingTrial: true }).finalSize, '1024x1024', 'trial mode should keep free default size');
 
-const expectedImageModels = ['qwen-image', 'gpt-image-1', 'gpt-image-1-mini', 'flux-schnell', 'dall-e-3', 'gpt-image-2', 'nano-banana', 'flux-kontext-pro', 'flux-kontext-max', 'grok-4.1-image'];
+const expectedImageModels = ['qwen-image', 'gpt-image-1', 'flux-schnell', 'dall-e-3', 'gpt-image-2', 'nano-banana', 'flux-kontext-pro', 'flux-kontext-max', 'grok-4.1-image'];
 const expectedVideoModels = [
   'wanx2.1-t2v-turbo',
   'wanx2.1-t2v-plus',
@@ -97,7 +97,7 @@ const enabledImages = MEDIA_IMAGE_MODELS.filter((item) => item.enabled).map((ite
 const enabledVideos = MEDIA_VIDEO_MODELS.filter((item) => item.enabled).map((item) => item.id);
 assert.deepEqual(enabledImages, expectedImageModels, 'all verified working image models should be enabled and exposed in a stable order');
 assert.deepEqual(enabledVideos, expectedVideoModels, 'all verified working video models should be enabled and exposed in a stable order');
-for (const id of ['qwen-image', 'gpt-image-1', 'gpt-image-1-mini', 'flux-kontext-pro', 'flux-kontext-max']) {
+for (const id of ['qwen-image', 'gpt-image-1', 'flux-kontext-pro', 'flux-kontext-max']) {
   assert.equal(MEDIA_IMAGE_MODELS.find((item) => item.id === id)?.supportsReferenceImages, true, `${id} should advertise media reference-image support`);
 }
 for (const id of expectedVideoModels.filter((id) => id !== 'T2V-01')) {
