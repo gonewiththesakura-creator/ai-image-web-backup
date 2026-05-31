@@ -574,23 +574,11 @@ const MEDIA_IMAGE_MODELS = [
 ];
 
 const MEDIA_VIDEO_MODELS = [
-  { id: 'wanx2.1-t2v-turbo', supportsFirstFrame: true, supportsLastFrame: true, name: 'Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 2.11, defaultDuration: null, enabled: true, note: '实测最终成功，适合低成本内测。' },
-  { id: 'wanx2.1-t2v-plus', supportsFirstFrame: true, supportsLastFrame: true, name: 'Fast 视频 Plus', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 3.51, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'wan2.2-t2v-plus', supportsFirstFrame: true, supportsLastFrame: true, name: 'Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 6.14, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'wan2.5-t2v-preview', supportsFirstFrame: true, supportsLastFrame: true, name: 'Pro 视频预览', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 6.14, defaultDuration: null, enabled: true, note: '实测最终成功，预览能力。' },
-  { id: 'wan2.6-t2v', supportsFirstFrame: true, supportsLastFrame: true, name: '旗舰视频', type: 'video', tier: 'ultra', unit: '次', estimatedDreamPoints: 8.78, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'MiniMax-Hailuo-02', supportsFirstFrame: true, supportsLastFrame: true, name: 'Standard 视频', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 3.51, defaultDuration: 6, enabled: true, note: '实测最终成功，适合短视频测试。' },
-  { id: 'MiniMax-Hailuo-2.3', supportsFirstFrame: true, supportsLastFrame: true, name: 'Standard 视频增强', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 5.27, defaultDuration: 6, enabled: true, note: '实测最终成功。' },
-  { id: 'T2V-01', supportsFirstFrame: true, name: '导演视频', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 2.81, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'sdols-2.0-fast', supportsFirstFrame: true, supportsLastFrame: true, name: '极速视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 3.69, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'sdols-2.0', supportsFirstFrame: true, supportsLastFrame: true, name: '标准视频增强', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 5.67, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'doubao-seedance-1-0-pro-fast-251015', supportsFirstFrame: true, supportsLastFrame: true, name: 'Seedance Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 0.18, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'doubao-seedance-2-0-fast-260128', supportsFirstFrame: true, supportsLastFrame: true, name: 'Seedance 2 Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 3.69, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'doubao-seedance-2-0-260128', supportsFirstFrame: true, supportsLastFrame: true, name: 'Seedance 2 Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 4.42, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'veo3.1-lite', supportsFirstFrame: true, supportsLastFrame: true, name: 'Lite 视频增强', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 1.40, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'grok-video-3', supportsFirstFrame: true, supportsLastFrame: true, name: 'Beta 视频', type: 'video', tier: 'beta', unit: '次', estimatedDreamPoints: 0.88, defaultDuration: null, enabled: true, note: '本轮有成功样本，也有失败样本，Beta 能力稳定性可能波动。' },
-  { id: 'sora-2', name: '创意视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 12, defaultDuration: null, enabled: false, note: '上游当前提交返回 400，暂不开放。' },
-  { id: 'veo3.1-fast', name: 'Fast 视频增强', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: false, note: '上游当前无可用渠道，暂不开放。' }
+  { id: 'doubao-seedance-1-0-pro-fast-251015', supportsFirstFrame: true, supportsLastFrame: true, name: 'Seedance Fast 视频', type: 'video', tier: 'fast', unit: '秒', estimatedDreamPoints: 0.10, defaultDuration: 5, enabled: true, note: '按秒计费，适合低成本快速成片。' },
+  { id: 'doubao-seedance-1-0-pro-251015', supportsFirstFrame: true, supportsLastFrame: true, name: 'Seedance 1 Pro 视频', type: 'video', tier: 'pro', unit: '秒', estimatedDreamPoints: 0.20, defaultDuration: 5, enabled: true, note: '按秒计费，适合更稳定画质。' },
+  { id: 'doubao-seedance-1-5-pro-251015', supportsFirstFrame: true, supportsLastFrame: true, name: 'Seedance 1.5 Pro 视频', type: 'video', tier: 'pro', unit: '秒', estimatedDreamPoints: 0.30, defaultDuration: 5, enabled: true, note: '按秒计费，适合高质量短片。' },
+  { id: 'doubao-seedance-2-0-260128', supportsFirstFrame: true, supportsLastFrame: true, name: 'Seedance 2 Pro 视频', type: 'video', tier: 'ultra', unit: '秒', estimatedDreamPoints: 1.50, defaultDuration: 5, enabled: true, note: '按秒计费，旗舰视频能力。' },
+  { id: 'grok-video-3', supportsFirstFrame: true, supportsLastFrame: true, name: 'Grok 视频', type: 'video', tier: 'beta', unit: '次', estimatedDreamPoints: 0.85, defaultDuration: 5, enabled: true, note: '按次计费，Beta 能力稳定性可能波动；失败不扣费。' }
 ];
 
 const MEDIA_MODEL_MAP = new Map([...MEDIA_IMAGE_MODELS, ...MEDIA_VIDEO_MODELS].map((item) => [item.id, item]));
@@ -620,23 +608,11 @@ const MEDIA_SIZE_MULTIPLIERS = {
 };
 const MEDIA_QUALITY_MULTIPLIERS = { low: 1, medium: 1, auto: 1, high: 1 };
 const MEDIA_VIDEO_PRICING = {
-  'wanx2.1-t2v-turbo': { hold: 2.11, price: 2.11 },
-  'wanx2.1-t2v-plus': { hold: 3.51, price: 3.51 },
-  'wan2.2-t2v-plus': { hold: 6.14, price: 6.14 },
-  'wan2.5-t2v-preview': { hold: 6.14, price: 6.14 },
-  'wan2.6-t2v': { hold: 8.78, price: 8.78 },
-  'MiniMax-Hailuo-02': { hold: 3.51, price: 3.51 },
-  'MiniMax-Hailuo-2.3': { hold: 5.27, price: 5.27 },
-  'T2V-01': { hold: 2.81, price: 2.81 },
-  'sdols-2.0-fast': { hold: 3.69, price: 3.69 },
-  'sdols-2.0': { hold: 5.67, price: 5.67 },
-  'doubao-seedance-1-0-pro-fast-251015': { hold: 0.18, price: 0.18 },
-  'doubao-seedance-2-0-fast-260128': { hold: 3.69, price: 3.69 },
-  'doubao-seedance-2-0-260128': { hold: 4.42, price: 4.42 },
-  'veo3.1-lite': { hold: 1.40, price: 1.40 },
-  'sora-2': { hold: 20.00, price: 20.00 },
-  'veo3.1-fast': { hold: 12.00, price: 12.00 },
-  'grok-video-3': { hold: 0.88, price: 0.88 }
+  'doubao-seedance-1-0-pro-fast-251015': { unit: 'second', rate: 0.10, minDuration: 1, maxDuration: 10 },
+  'doubao-seedance-1-0-pro-251015': { unit: 'second', rate: 0.20, minDuration: 1, maxDuration: 10 },
+  'doubao-seedance-1-5-pro-251015': { unit: 'second', rate: 0.30, minDuration: 1, maxDuration: 10 },
+  'doubao-seedance-2-0-260128': { unit: 'second', rate: 1.50, minDuration: 1, maxDuration: 10 },
+  'grok-video-3': { unit: 'request', price: 0.85 }
 };
 const VIDEO_API_BASE_URL = (process.env.VIDEO_API_BASE_URL || API_BASE_URL.replace(/\/v1$/, '')).replace(/\/$/, '');
 const MEDIA_REQUIRE_9999 = String(process.env.MEDIA_REQUIRE_9999 || '1') !== '0';
@@ -669,9 +645,26 @@ function calculateMediaImagePrice(model, size, quality, n = 1) {
   return roundMoney(unitPrice * count);
 }
 
-function calculateMediaVideoPrice(model) {
-  const item = MEDIA_VIDEO_PRICING[model] || { hold: 10, price: 10 };
-  return { hold: roundMoney(item.hold), price: roundMoney(item.price) };
+function normalizeMediaVideoDuration(value, model) {
+  const item = MEDIA_VIDEO_PRICING[model] || {};
+  const modelInfo = MEDIA_MODEL_MAP.get(model);
+  const fallback = Number(modelInfo?.defaultDuration || 5);
+  const raw = Number(value || fallback || 5);
+  const minDuration = Number(item.minDuration || 1);
+  const maxDuration = Number(item.maxDuration || 10);
+  if (!Number.isFinite(raw) || raw <= 0) return Math.max(minDuration, Math.min(maxDuration, fallback || minDuration));
+  return Math.max(minDuration, Math.min(maxDuration, Math.ceil(raw)));
+}
+
+function calculateMediaVideoPrice(model, duration = null) {
+  const item = MEDIA_VIDEO_PRICING[model] || { unit: 'request', price: 10 };
+  if (item.unit === 'second') {
+    const seconds = normalizeMediaVideoDuration(duration, model);
+    const price = roundMoney((Number(item.rate) || 10) * seconds);
+    return { hold: price, price, unit: 'second', seconds, rate: roundMoney(item.rate) };
+  }
+  const price = roundMoney(item.price ?? item.hold ?? 10);
+  return { hold: price, price, unit: 'request', seconds: null, rate: price };
 }
 
 function normalizeMediaImageSizeForModel(model, size) {
@@ -1476,7 +1469,10 @@ app.get('/api/media/models', (req, res) => {
         '4K': calculateMediaImagePrice(item.id, '3840x3840', 'auto', 1)
       }
     })),
-    video: MEDIA_VIDEO_MODELS.filter((item) => item.enabled)
+    video: MEDIA_VIDEO_MODELS.filter((item) => item.enabled).map((item) => ({
+      ...item,
+      pricing: MEDIA_VIDEO_PRICING[item.id] || null
+    }))
   });
 });
 
@@ -1564,9 +1560,9 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
     if (!prompt) throw publicError(400, '请输入视频描述。');
     const model = normalizeMediaModel(req.body?.model, 'video');
     const modelInfo = MEDIA_MODEL_MAP.get(model);
-    const duration = Number(req.body?.duration || modelInfo?.defaultDuration || 0);
+    const duration = normalizeMediaVideoDuration(req.body?.duration, model);
     const body = { model, prompt };
-    if (Number.isFinite(duration) && duration > 0 && !['wanx2.1-t2v-turbo', 'wan2.2-t2v-plus', 'grok-video-3'].includes(model)) body.duration = duration;
+    if (Number.isFinite(duration) && duration > 0 && model !== 'grok-video-3') body.duration = duration;
     const firstFrameUrl = normalizeHttpImageUrl(req.body?.image_url || req.body?.first_frame_url || req.body?.firstFrameUrl, '首帧图片 URL') || await saveMediaReferenceImageForUpstream(req.body?.firstFrameImage || req.body?.first_frame_image, req, 'first-frame');
     const lastFrameUrl = normalizeHttpImageUrl(req.body?.end_image_url || req.body?.last_frame_url || req.body?.lastFrameUrl, '尾帧图片 URL') || await saveMediaReferenceImageForUpstream(req.body?.lastFrameImage || req.body?.last_frame_image, req, 'last-frame');
     if (firstFrameUrl) body.image_url = firstFrameUrl;
@@ -1575,7 +1571,7 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
     if (typeof req.body?.size === 'string' && req.body.size) body.size = req.body.size.slice(0, 40);
     const pendingCount = db.prepare(`SELECT COUNT(*) AS count FROM media_tasks WHERE api_key_id = ? AND billing_status = 'PENDING' AND created_at > ?`).get(String(access.keyId), Date.now() - 6 * 60 * 60 * 1000).count;
     if (Number(pendingCount || 0) >= 3) throw publicError(429, '当前 API Key 有过多视频任务待完成，请等待任务完成后再提交。');
-    const pricing = calculateMediaVideoPrice(model);
+    const pricing = calculateMediaVideoPrice(model, duration);
     await ensureMediaBalance(access, pricing.hold);
 
     const controller = new AbortController();
@@ -2167,6 +2163,7 @@ export {
   MEDIA_VIDEO_PRICING,
   calculateMediaImagePrice,
   calculateMediaVideoPrice,
+  normalizeMediaVideoDuration,
   normalizeMediaModel,
   normalizeMediaImageSizeForModel,
   normalizeMediaImageQualityForModel,

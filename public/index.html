@@ -1642,6 +1642,24 @@
       });
     }
 
+    function mediaVideoPriceText(model) {
+      const item = model || selectedMediaModelItem();
+      const pricing = item?.pricing || {};
+      if (pricing.unit === 'second') return `${formatDreamPoints(pricing.rate)} 点/秒`;
+      return `${formatDreamPoints(item?.estimatedDreamPoints)} 点/${item?.unit || '次'}`;
+    }
+
+    function mediaVideoTierText(model) {
+      const item = model || selectedMediaModelItem();
+      const pricing = item?.pricing || {};
+      if (pricing.unit === 'second') {
+        const min = pricing.minDuration || 1;
+        const max = pricing.maxDuration || 10;
+        return `${item.note || ''} 时长 ${min}-${max} 秒，按实际提交时长计费。`;
+      }
+      return item?.note || '';
+    }
+
     function activeMediaModels() {
       return mediaMode === 'video' ? (mediaModels.video || []) : (mediaModels.image || []);
     }
@@ -1663,10 +1681,10 @@
         const imagePrice = mediaMode === 'image' ? mediaImagePriceForSize(m, mediaSize?.value || '1024x1024') : null;
         const priceText = mediaMode === 'image' && Number.isFinite(Number(imagePrice))
           ? `${formatDreamPoints(imagePrice)} 点/张起`
-          : `${formatDreamPoints(m.estimatedDreamPoints)} 点/${m.unit}`;
+          : mediaVideoPriceText(m);
         const tierText = mediaMode === 'image' && m.pricing
           ? `1K ${formatDreamPoints(m.pricing['1K'])} · 2K ${formatDreamPoints(m.pricing['2K'])} · 4K ${formatDreamPoints(m.pricing['4K'])} 点`
-          : (m.note || '');
+          : mediaVideoTierText(m);
         return `
         <button type="button" class="model-option ${m.id === selectedMediaModel ? 'active' : ''}" data-media-model="${escapeHtml(m.id)}">
           <strong>${escapeHtml(m.name)} · ${escapeHtml(priceText)}</strong>
