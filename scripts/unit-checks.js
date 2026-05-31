@@ -118,12 +118,12 @@ for (const id of expectedVideoModels) {
   assert.equal(MEDIA_VIDEO_PRICING[id].hold, MEDIA_VIDEO_PRICING[id].price, `${id} hold and final price should match fixed-price billing`);
   assert.equal(normalizeMediaModel(id, 'video'), id, `${id} should normalize to itself while enabled`);
 }
-assert.equal(calculateMediaImagePrice('qwen-image', '1024x1024', 'low', 1), 0.41, 'qwen-image low 1K should not discount below RMB-converted 20% margin floor');
-assert.equal(calculateMediaImagePrice('flux-schnell', '1024x1024', 'low', 1), 0.30, 'flux-schnell low 1K should not discount below configured floor');
-assert.equal(calculateMediaImagePrice('flux-kontext-max', '1024x1024', 'low', 1), 1.20, 'flux-kontext-max low 1K should not discount below configured floor');
-assert.equal(calculateMediaImagePrice('grok-4.1-image', '1024x1024', 'low', 1), 0.16, 'grok image low 1K should not discount below RMB-converted 20% margin floor');
-assert.equal(calculateMediaImagePrice('gpt-image-2', '1024x1024', 'low', 1), 0.06, 'gpt-image-2 low 1K should keep at least RMB-converted 20% margin floor');
-assert.equal(calculateMediaImagePrice('gpt-image-2', '2048x2048', 'high', 1), 0.2112, 'gpt-image-2 large/high should still scale above the floor');
+assert.equal(calculateMediaImagePrice('qwen-image', '1024x1024', 'low', 1), 0.40, 'image 1K/low should use the 1x floor price, with no quality discount');
+assert.equal(calculateMediaImagePrice('flux-schnell', '1024x1024', 'high', 1), 0.40, 'image 1K/high should not add a quality surcharge');
+assert.equal(calculateMediaImagePrice('gpt-image-2', '1024x1024', 'low', 1), 0.40, 'flagship image2 1K anchor price should be 0.4 Dream points');
+assert.equal(calculateMediaImagePrice('gpt-image-2', '2048x2048', 'high', 1), 0.80, 'flagship image2 2K anchor price should be 0.8 Dream points and ignore high quality labels');
+assert.equal(calculateMediaImagePrice('gpt-image-2', '3840x3840', 'auto', 1), 1.20, 'flagship image2 4K anchor price should be 1.2 Dream points');
+assert.equal(calculateMediaImagePrice('grok-4.1-image', '3840x2160', 'low', 2), 2.40, '4K pricing should be 3x per image and multiply by count');
 assert.deepEqual(calculateMediaVideoPrice('wanx2.1-t2v-turbo'), { hold: 2.11, price: 2.11 }, 'wan turbo fixed price should use about 30% margin over final upstream cost');
 assert.deepEqual(calculateMediaVideoPrice('sdols-2.0-fast'), { hold: 3.69, price: 3.69 }, 'sdols fast fixed price should use about 30% margin over final upstream cost');
 assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-2-0-260128'), { hold: 4.42, price: 4.42 }, 'seedance 2 pro fixed price should use about 30% margin over final upstream cost');

@@ -519,21 +519,21 @@
                 </div>
                 <div class="grid2">
                   <div>
-                    <label for="mediaSize">图片比例</label>
+                    <label for="mediaSize">图片规格</label>
                     <select id="mediaSize">
-                      <option value="1024x1024">1:1 方图</option>
-                      <option value="1536x1152">4:3 横图</option>
-                      <option value="1152x1536">3:4 竖图</option>
-                      <option value="2048x1152">16:9 横图</option>
-                      <option value="1152x2048">9:16 竖图</option>
+                      <option value="1024x1024">1K 方图 · 0.4 点</option>
+                      <option value="2048x1152">2K 横图 · 0.8 点</option>
+                      <option value="1152x2048">2K 竖图 · 0.8 点</option>
+                      <option value="2048x2048">2K 方图 · 0.8 点</option>
+                      <option value="3840x2160">4K 横图 · 1.2 点</option>
+                      <option value="2160x3840">4K 竖图 · 1.2 点</option>
+                      <option value="3840x3840">4K 方图 · 1.2 点</option>
                     </select>
                   </div>
                   <div>
-                    <label for="mediaQuality">图片质量</label>
+                    <label for="mediaQuality">图片档位</label>
                     <select id="mediaQuality">
-                      <option value="low">快速预览</option>
-                      <option value="auto" selected>标准/自动</option>
-                      <option value="high">高质量</option>
+                      <option value="auto" selected>标准生成</option>
                     </select>
                   </div>
                 </div>
@@ -1666,7 +1666,7 @@
         const endpoint = mediaMode === 'video' ? MEDIA_VIDEO_ENDPOINT : MEDIA_IMAGE_ENDPOINT;
         const payload = mediaMode === 'video'
           ? { apiKey, model: selectedMediaModel, prompt, duration: Number(mediaDuration.value), aspect_ratio: mediaAspect.value, firstFrameImage: mediaVideoFrames.first || undefined, lastFrameImage: mediaVideoFrames.last || undefined }
-          : { apiKey, model: selectedMediaModel, prompt, size: mediaSize.value || $('sizePreset').value, format: $('format').value, quality: mediaQuality.value || 'auto', n: 1, referenceImages: mediaImageReferencesData };
+          : { apiKey, model: selectedMediaModel, prompt, size: mediaSize.value || $('sizePreset').value, format: $('format').value, quality: 'auto', n: 1, referenceImages: mediaImageReferencesData };
         const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(data.error || '生成失败，请稍后重试。');

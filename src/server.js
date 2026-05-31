@@ -557,20 +557,20 @@ function normalizeChatModel(value) {
 }
 
 const MEDIA_IMAGE_MODELS = [
-  { id: 'qwen-image', name: '通用作图', type: 'image', tier: 'standard', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 0.41, enabled: true, note: '实测可用，适合中文提示词与通用视觉。' },
-  { id: 'gpt-image-1', name: '高级作图', type: 'image', tier: 'pro', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 0.10, enabled: true, note: '实测可用，适合复杂画面和高质量视觉。' },
-  { id: 'gpt-image-1-mini', name: '高级作图 Mini', type: 'image', tier: 'fast', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 1.62, enabled: true, note: '实测可用，返回 base64 图片，适合快速图像生成。' },
-  { id: 'flux-schnell', name: 'Flux 极速作图', type: 'image', tier: 'fast', unit: '张', estimatedDreamPoints: 0.30, enabled: true, note: '实测可用，返回 base64 图片，速度较快。' },
-  { id: 'dall-e-3', name: '经典标准作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 0.06, enabled: true, note: '复测可用，但出图较慢。' },
-  { id: 'gpt-image-2', name: '旗舰作图', type: 'image', tier: 'ultra', unit: '张', estimatedDreamPoints: 0.06, enabled: true, note: '复测可用，但耗时较长，建议小范围使用。' },
-  { id: 'nano-banana', name: '轻量创意作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 0.13, enabled: true, note: '本轮有成功扣费记录，轻量创意图能力。' },
-  { id: 'flux-kontext-pro', name: 'Flux Kontext Pro', type: 'image', tier: 'pro', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 0.80, enabled: true, note: '本轮有成功扣费记录，适合图像语义编辑与创意生成。' },
-  { id: 'flux-kontext-max', name: 'Flux Kontext Max', type: 'image', tier: 'ultra', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 1.20, enabled: true, note: '本轮有成功扣费记录，高质量图像语义编辑能力。' },
-  { id: 'grok-4.1-image', name: 'Beta 作图', type: 'image', tier: 'beta', unit: '张', estimatedDreamPoints: 0.16, enabled: true, note: '本轮有成功扣费记录，Beta 能力稳定性可能波动。' },
-  { id: 'gpt-image-1.5', name: '高级作图增强', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3.5, enabled: false, note: '上游当前无可用渠道，暂不开放。' },
-  { id: 'nano-banana-pro', name: '创意作图 Pro', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3.5, enabled: false, note: '上游当前无可用渠道，暂不开放。' },
-  { id: 'flux-dev', name: 'Flux 快速作图', type: 'image', tier: 'fast', unit: '张', estimatedDreamPoints: 1.5, enabled: false, note: '上游超时，不稳定，暂不展示。' },
-  { id: 'flux-pro', name: 'Flux 专业作图', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3, enabled: false, note: '上游返回 Model disabled，暂不开放。' }
+  { id: 'qwen-image', name: '通用作图', type: 'image', tier: 'standard', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 0.40, enabled: true, note: '实测可用，适合中文提示词与通用视觉。' },
+  { id: 'gpt-image-1', name: '高级作图', type: 'image', tier: 'pro', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 0.40, enabled: true, note: '实测可用，适合复杂画面和高质量视觉。' },
+  { id: 'gpt-image-1-mini', name: '高级作图 Mini', type: 'image', tier: 'fast', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 0.40, enabled: true, note: '实测可用，返回 base64 图片，适合快速图像生成。' },
+  { id: 'flux-schnell', name: 'Flux 极速作图', type: 'image', tier: 'fast', unit: '张', estimatedDreamPoints: 0.40, enabled: true, note: '实测可用，返回 base64 图片，速度较快。' },
+  { id: 'dall-e-3', name: '经典标准作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 0.40, enabled: true, note: '复测可用，但出图较慢。' },
+  { id: 'gpt-image-2', name: '旗舰作图', type: 'image', tier: 'ultra', unit: '张', estimatedDreamPoints: 0.40, enabled: true, note: '复测可用，但耗时较长，建议小范围使用。' },
+  { id: 'nano-banana', name: '轻量创意作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 0.40, enabled: true, note: '本轮有成功扣费记录，轻量创意图能力。' },
+  { id: 'flux-kontext-pro', name: 'Flux Kontext Pro', type: 'image', tier: 'pro', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 0.40, enabled: true, note: '本轮有成功扣费记录，适合图像语义编辑与创意生成。' },
+  { id: 'flux-kontext-max', name: 'Flux Kontext Max', type: 'image', tier: 'ultra', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 0.40, enabled: true, note: '本轮有成功扣费记录，高质量图像语义编辑能力。' },
+  { id: 'grok-4.1-image', name: 'Beta 作图', type: 'image', tier: 'beta', unit: '张', estimatedDreamPoints: 0.40, enabled: true, note: '本轮有成功扣费记录，Beta 能力稳定性可能波动。' },
+  { id: 'gpt-image-1.5', name: '高级作图增强', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 0.40, enabled: false, note: '上游当前无可用渠道，暂不开放。' },
+  { id: 'nano-banana-pro', name: '创意作图 Pro', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 0.40, enabled: false, note: '上游当前无可用渠道，暂不开放。' },
+  { id: 'flux-dev', name: 'Flux 快速作图', type: 'image', tier: 'fast', unit: '张', estimatedDreamPoints: 0.40, enabled: false, note: '上游超时，不稳定，暂不展示。' },
+  { id: 'flux-pro', name: 'Flux 专业作图', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 0.40, enabled: false, note: '上游返回 Model disabled，暂不开放。' }
 ];
 
 const MEDIA_VIDEO_MODELS = [
@@ -594,32 +594,20 @@ const MEDIA_VIDEO_MODELS = [
 ];
 
 const MEDIA_MODEL_MAP = new Map([...MEDIA_IMAGE_MODELS, ...MEDIA_VIDEO_MODELS].map((item) => [item.id, item]));
-const MEDIA_IMAGE_PRICING = {
-  'gpt-image-1': { base: 0.10, min: 0.10 },
-  'gpt-image-1-mini': { base: 1.62, min: 1.62 },
-  'flux-schnell': { base: 0.30, min: 0.30 },
-  'flux-kontext-pro': { base: 0.80, min: 0.80 },
-  'flux-kontext-max': { base: 1.20, min: 1.20 },
-  'gpt-image-1.5': { base: 0.90, min: 0.90 },
-  'gpt-image-2': { base: 0.06, min: 0.06 },
-  'dall-e-3': { base: 0.06, min: 0.06 },
-  'qwen-image': { base: 0.41, min: 0.41 },
-  'nano-banana': { base: 0.13, min: 0.13 },
-  'nano-banana-pro': { base: 0.90, min: 0.90 },
-  'flux-dev': { base: 0.35, min: 0.35 },
-  'flux-pro': { base: 0.80, min: 0.80 },
-  'grok-4.1-image': { base: 0.16, min: 0.16 }
-};
+const MEDIA_IMAGE_PRICING = Object.fromEntries(MEDIA_IMAGE_MODELS.map((model) => [model.id, { base: 0.40, min: 0.40 }]));
 const MEDIA_SIZE_MULTIPLIERS = {
   '1024x1024': 1,
-  '1536x1152': 1.35,
-  '1152x1536': 1.35,
-  '2048x1152': 1.7,
-  '1152x2048': 1.7,
-  '2048x2048': 2.2,
+  '1536x1152': 1,
+  '1152x1536': 1,
+  '2048x1152': 2,
+  '1152x2048': 2,
+  '2048x2048': 2,
+  '3840x2160': 3,
+  '2160x3840': 3,
+  '3840x3840': 3,
   auto: 1
 };
-const MEDIA_QUALITY_MULTIPLIERS = { low: 0.75, medium: 1, auto: 1, high: 1.6 };
+const MEDIA_QUALITY_MULTIPLIERS = { low: 1, medium: 1, auto: 1, high: 1 };
 const MEDIA_VIDEO_PRICING = {
   'wanx2.1-t2v-turbo': { hold: 2.11, price: 2.11 },
   'wanx2.1-t2v-plus': { hold: 3.51, price: 3.51 },
