@@ -1491,6 +1491,7 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
     const quality = normalizeMediaImageQualityForModel(model, req.body?.quality);
     const n = normalizeCount(req.body?.n);
     const referenceImages = await normalizeReferenceImages(req.body?.referenceImages || req.body?.reference_images || []);
+    const upstreamModel = referenceImages.length && model === 'qwen-image' ? 'qwen-image-edit' : model;
     const salePrice = calculateMediaImagePrice(model, size, quality, n);
     await ensureMediaBalance(access, salePrice);
     const startedAt = Date.now();
@@ -1498,7 +1499,7 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     const mediaUpstreamKey = T8_MEDIA_API_KEY || apiKey;
     const imageBaseUrl = T8_MEDIA_API_KEY ? `${T8_MEDIA_API_BASE_URL}/v1` : API_BASE_URL;
-    const upstreamRequest = await buildMediaImageUpstreamRequest({ model, prompt, size, quality, output_format, n, references: referenceImages });
+    const upstreamRequest = await buildMediaImageUpstreamRequest({ model: upstreamModel, prompt, size, quality, output_format, n, references: referenceImages });
     const upstreamResp = await fetch(`${imageBaseUrl}${upstreamRequest.path}`, {
       method: 'POST',
       signal: controller.signal,
@@ -1522,7 +1523,7 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
       model,
       amount: salePrice,
       upstreamCost: cost,
-      metadata: { size, quality, n, output_format, referenceCount: referenceImages.length, promptHash: hashSecret(prompt) }
+      metadata: { size, quality, n, output_format, referenceCount: referenceImages.length, upstreamModel, promptHash: hashSecret(prompt) }
     });
     res.json({
       ok: true,
