@@ -118,13 +118,15 @@ for (const id of expectedVideoModels) {
   assert.equal(MEDIA_VIDEO_PRICING[id].hold, MEDIA_VIDEO_PRICING[id].price, `${id} hold and final price should match fixed-price billing`);
   assert.equal(normalizeMediaModel(id, 'video'), id, `${id} should normalize to itself while enabled`);
 }
-assert.equal(calculateMediaImagePrice('qwen-image', '1024x1024', 'low', 1), 0.3075, 'qwen-image low 1K should charge about 20% margin over upstream cost');
-assert.equal(calculateMediaImagePrice('flux-schnell', '1024x1024', 'low', 1), 0.225, 'flux-schnell low 1K should keep configured exploratory base price');
-assert.equal(calculateMediaImagePrice('flux-kontext-max', '1024x1024', 'low', 1), 0.9, 'flux-kontext-max low 1K should keep premium Kontext Max price');
-assert.equal(calculateMediaImagePrice('grok-4.1-image', '1024x1024', 'low', 1), 0.12, 'grok image low 1K should charge about 20% margin over upstream cost');
-assert.deepEqual(calculateMediaVideoPrice('wanx2.1-t2v-turbo'), { hold: 1.56, price: 1.56 }, 'wan turbo fixed price should use about 30% margin over final upstream cost');
-assert.deepEqual(calculateMediaVideoPrice('sdols-2.0-fast'), { hold: 2.73, price: 2.73 }, 'sdols fast fixed price should use about 30% margin over final upstream cost');
-assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-2-0-260128'), { hold: 3.28, price: 3.28 }, 'seedance 2 pro fixed price should use about 30% margin over final upstream cost');
+assert.equal(calculateMediaImagePrice('qwen-image', '1024x1024', 'low', 1), 0.41, 'qwen-image low 1K should not discount below RMB-converted 20% margin floor');
+assert.equal(calculateMediaImagePrice('flux-schnell', '1024x1024', 'low', 1), 0.30, 'flux-schnell low 1K should not discount below configured floor');
+assert.equal(calculateMediaImagePrice('flux-kontext-max', '1024x1024', 'low', 1), 1.20, 'flux-kontext-max low 1K should not discount below configured floor');
+assert.equal(calculateMediaImagePrice('grok-4.1-image', '1024x1024', 'low', 1), 0.16, 'grok image low 1K should not discount below RMB-converted 20% margin floor');
+assert.equal(calculateMediaImagePrice('gpt-image-2', '1024x1024', 'low', 1), 0.06, 'gpt-image-2 low 1K should keep at least RMB-converted 20% margin floor');
+assert.equal(calculateMediaImagePrice('gpt-image-2', '2048x2048', 'high', 1), 0.2112, 'gpt-image-2 large/high should still scale above the floor');
+assert.deepEqual(calculateMediaVideoPrice('wanx2.1-t2v-turbo'), { hold: 2.11, price: 2.11 }, 'wan turbo fixed price should use about 30% margin over final upstream cost');
+assert.deepEqual(calculateMediaVideoPrice('sdols-2.0-fast'), { hold: 3.69, price: 3.69 }, 'sdols fast fixed price should use about 30% margin over final upstream cost');
+assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-2-0-260128'), { hold: 4.42, price: 4.42 }, 'seedance 2 pro fixed price should use about 30% margin over final upstream cost');
 
 assert.equal(normalizeMediaImageSizeForModel('dall-e-3', '2048x2048'), '1024x1024', 'dall-e-3 should never receive unsupported square 2K size');
 assert.equal(normalizeMediaImageSizeForModel('dall-e-3', '1152x2048'), '1024x1792', 'dall-e-3 portrait should map to supported portrait size');
@@ -133,7 +135,7 @@ assert.equal(normalizeMediaImageQualityForModel('dall-e-3', 'low'), 'standard', 
 assert.equal(publicMediaErrorMessage(400, "size must be one of 1024x1024, 1024x1792 or 1792x1024 for dall-e-3"), '当前模型不支持所选尺寸，已按模型支持范围调整，请重新提交。', 'dall-e-3 size errors should be short and actionable');
 assert.equal(publicMediaErrorMessage(502, 'openai_error'), '上游暂时没有返回可用结果，请稍后重试或换一个模型。', 'openai_error should not leak raw provider code');
 assert.equal(publicMediaErrorMessage(502, '当前分组上游负载已饱和，请稍后再试：size must be one of 1024x1024, 1024x1792 or 1792x1024 for dall-e-3 (request id: abc)'), '当前模型不支持所选尺寸，已按模型支持范围调整，请重新提交。', 'mixed saturation and size detail should be classified as size error');
-assert.equal(summarizeMediaImageSuccess({ cost: null, billing: { charged: 0.3075 }, images: [{}], usage: { total_tokens: 4190 } }), '图片生成完成，已扣费 0.3075 点，已返回 1 张图片。', 'success summary should hide verbose usage JSON and upstream cost');
+assert.equal(summarizeMediaImageSuccess({ cost: null, billing: { charged: 0.41 }, images: [{}], usage: { total_tokens: 4190 } }), '图片生成完成，已扣费 0.41 点，已返回 1 张图片。', 'success summary should hide verbose usage JSON and upstream cost');
 assert.deepEqual(extractMediaImages({ data: [{ revised_prompt: 'only text' }], usage: { total_tokens: 12 } }, 'png', 'p'), [], 'text-only upstream responses must not be treated as successful images');
 
 console.log('Unit checks passed.');
