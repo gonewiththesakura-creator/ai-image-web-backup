@@ -557,15 +557,15 @@ function normalizeChatModel(value) {
 }
 
 const MEDIA_IMAGE_MODELS = [
-  { id: 'qwen-image', name: '通用作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 2, enabled: true, note: '实测可用，适合中文提示词与通用视觉。' },
-  { id: 'gpt-image-1', name: '高级作图', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 2.5, enabled: true, note: '实测可用，适合复杂画面和高质量视觉。' },
-  { id: 'gpt-image-1-mini', name: '高级作图 Mini', type: 'image', tier: 'fast', unit: '张', estimatedDreamPoints: 1.5, enabled: true, note: '实测可用，返回 base64 图片，适合快速图像生成。' },
+  { id: 'qwen-image', name: '通用作图', type: 'image', tier: 'standard', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 2, enabled: true, note: '实测可用，适合中文提示词与通用视觉。' },
+  { id: 'gpt-image-1', name: '高级作图', type: 'image', tier: 'pro', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 2.5, enabled: true, note: '实测可用，适合复杂画面和高质量视觉。' },
+  { id: 'gpt-image-1-mini', name: '高级作图 Mini', type: 'image', tier: 'fast', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 1.5, enabled: true, note: '实测可用，返回 base64 图片，适合快速图像生成。' },
   { id: 'flux-schnell', name: 'Flux 极速作图', type: 'image', tier: 'fast', unit: '张', estimatedDreamPoints: 1.2, enabled: true, note: '实测可用，返回 base64 图片，速度较快。' },
   { id: 'dall-e-3', name: '经典标准作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 1.5, enabled: true, note: '复测可用，但出图较慢。' },
   { id: 'gpt-image-2', name: '旗舰作图', type: 'image', tier: 'ultra', unit: '张', estimatedDreamPoints: 4.5, enabled: true, note: '复测可用，但耗时较长，建议小范围使用。' },
   { id: 'nano-banana', name: '轻量创意作图', type: 'image', tier: 'standard', unit: '张', estimatedDreamPoints: 2, enabled: true, note: '本轮有成功扣费记录，轻量创意图能力。' },
-  { id: 'flux-kontext-pro', name: 'Flux Kontext Pro', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3, enabled: true, note: '本轮有成功扣费记录，适合图像语义编辑与创意生成。' },
-  { id: 'flux-kontext-max', name: 'Flux Kontext Max', type: 'image', tier: 'ultra', unit: '张', estimatedDreamPoints: 4, enabled: true, note: '本轮有成功扣费记录，高质量图像语义编辑能力。' },
+  { id: 'flux-kontext-pro', name: 'Flux Kontext Pro', type: 'image', tier: 'pro', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 3, enabled: true, note: '本轮有成功扣费记录，适合图像语义编辑与创意生成。' },
+  { id: 'flux-kontext-max', name: 'Flux Kontext Max', type: 'image', tier: 'ultra', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 4, enabled: true, note: '本轮有成功扣费记录，高质量图像语义编辑能力。' },
   { id: 'grok-4.1-image', name: 'Beta 作图', type: 'image', tier: 'beta', unit: '张', estimatedDreamPoints: 4, enabled: true, note: '本轮有成功扣费记录，Beta 能力稳定性可能波动。' },
   { id: 'gpt-image-1.5', name: '高级作图增强', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3.5, enabled: false, note: '上游当前无可用渠道，暂不开放。' },
   { id: 'nano-banana-pro', name: '创意作图 Pro', type: 'image', tier: 'pro', unit: '张', estimatedDreamPoints: 3.5, enabled: false, note: '上游当前无可用渠道，暂不开放。' },
@@ -574,21 +574,21 @@ const MEDIA_IMAGE_MODELS = [
 ];
 
 const MEDIA_VIDEO_MODELS = [
-  { id: 'wanx2.1-t2v-turbo', name: 'Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 5, defaultDuration: null, enabled: true, note: '实测最终成功，适合低成本内测。' },
-  { id: 'wanx2.1-t2v-plus', name: 'Fast 视频 Plus', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'wan2.2-t2v-plus', name: 'Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 12, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'wan2.5-t2v-preview', name: 'Pro 视频预览', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 12, defaultDuration: null, enabled: true, note: '实测最终成功，预览能力。' },
-  { id: 'wan2.6-t2v', name: '旗舰视频', type: 'video', tier: 'ultra', unit: '次', estimatedDreamPoints: 16, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'MiniMax-Hailuo-02', name: 'Standard 视频', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 8, defaultDuration: 6, enabled: true, note: '实测最终成功，适合短视频测试。' },
-  { id: 'MiniMax-Hailuo-2.3', name: 'Standard 视频增强', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 10, defaultDuration: 6, enabled: true, note: '实测最终成功。' },
-  { id: 'T2V-01', name: '导演视频', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'sdols-2.0-fast', name: '极速视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 6, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'sdols-2.0', name: '标准视频增强', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'doubao-seedance-1-0-pro-fast-251015', name: 'Seedance Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'doubao-seedance-2-0-fast-260128', name: 'Seedance 2 Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 10, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'doubao-seedance-2-0-260128', name: 'Seedance 2 Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 14, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'veo3.1-lite', name: 'Lite 视频增强', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 10, defaultDuration: null, enabled: true, note: '实测最终成功。' },
-  { id: 'grok-video-3', name: 'Beta 视频', type: 'video', tier: 'beta', unit: '次', estimatedDreamPoints: 6, defaultDuration: null, enabled: true, note: '本轮有成功样本，也有失败样本，Beta 能力稳定性可能波动。' },
+  { id: 'wanx2.1-t2v-turbo', supportsFirstFrame: true, supportsLastFrame: true, name: 'Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 5, defaultDuration: null, enabled: true, note: '实测最终成功，适合低成本内测。' },
+  { id: 'wanx2.1-t2v-plus', supportsFirstFrame: true, supportsLastFrame: true, name: 'Fast 视频 Plus', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: true, note: '实测最终成功。' },
+  { id: 'wan2.2-t2v-plus', supportsFirstFrame: true, supportsLastFrame: true, name: 'Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 12, defaultDuration: null, enabled: true, note: '实测最终成功。' },
+  { id: 'wan2.5-t2v-preview', supportsFirstFrame: true, supportsLastFrame: true, name: 'Pro 视频预览', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 12, defaultDuration: null, enabled: true, note: '实测最终成功，预览能力。' },
+  { id: 'wan2.6-t2v', supportsFirstFrame: true, supportsLastFrame: true, name: '旗舰视频', type: 'video', tier: 'ultra', unit: '次', estimatedDreamPoints: 16, defaultDuration: null, enabled: true, note: '实测最终成功。' },
+  { id: 'MiniMax-Hailuo-02', supportsFirstFrame: true, supportsLastFrame: true, name: 'Standard 视频', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 8, defaultDuration: 6, enabled: true, note: '实测最终成功，适合短视频测试。' },
+  { id: 'MiniMax-Hailuo-2.3', supportsFirstFrame: true, supportsLastFrame: true, name: 'Standard 视频增强', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 10, defaultDuration: 6, enabled: true, note: '实测最终成功。' },
+  { id: 'T2V-01', supportsFirstFrame: true, name: '导演视频', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: true, note: '实测最终成功。' },
+  { id: 'sdols-2.0-fast', supportsFirstFrame: true, supportsLastFrame: true, name: '极速视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 6, defaultDuration: null, enabled: true, note: '实测最终成功。' },
+  { id: 'sdols-2.0', supportsFirstFrame: true, supportsLastFrame: true, name: '标准视频增强', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: true, note: '实测最终成功。' },
+  { id: 'doubao-seedance-1-0-pro-fast-251015', supportsFirstFrame: true, supportsLastFrame: true, name: 'Seedance Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: true, note: '实测最终成功。' },
+  { id: 'doubao-seedance-2-0-fast-260128', supportsFirstFrame: true, supportsLastFrame: true, name: 'Seedance 2 Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 10, defaultDuration: null, enabled: true, note: '实测最终成功。' },
+  { id: 'doubao-seedance-2-0-260128', supportsFirstFrame: true, supportsLastFrame: true, name: 'Seedance 2 Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 14, defaultDuration: null, enabled: true, note: '实测最终成功。' },
+  { id: 'veo3.1-lite', supportsFirstFrame: true, supportsLastFrame: true, name: 'Lite 视频增强', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 10, defaultDuration: null, enabled: true, note: '实测最终成功。' },
+  { id: 'grok-video-3', supportsFirstFrame: true, supportsLastFrame: true, name: 'Beta 视频', type: 'video', tier: 'beta', unit: '次', estimatedDreamPoints: 6, defaultDuration: null, enabled: true, note: '本轮有成功样本，也有失败样本，Beta 能力稳定性可能波动。' },
   { id: 'sora-2', name: '创意视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 12, defaultDuration: null, enabled: false, note: '上游当前提交返回 400，暂不开放。' },
   { id: 'veo3.1-fast', name: 'Fast 视频增强', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 8, defaultDuration: null, enabled: false, note: '上游当前无可用渠道，暂不开放。' }
 ];
@@ -1175,6 +1175,54 @@ export async function normalizeReferenceImages(input) {
   return normalized;
 }
 
+function publicBaseUrl(req) {
+  const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim() || 'https';
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+  if (!host) return '';
+  return `${proto}://${host}`.replace(/\/$/, '');
+}
+
+async function saveMediaReferenceImageForUpstream(dataUrl, req, label = 'frame') {
+  if (!dataUrl) return '';
+  const normalized = await normalizeReferenceImages([dataUrl]);
+  if (!normalized.length) return '';
+  const id = crypto.randomUUID();
+  const filename = `media-${label}-${id}.jpg`;
+  fs.writeFileSync(path.join(PUBLIC_UPLOAD_DIR, filename), normalized[0].buffer);
+  const base = publicBaseUrl(req);
+  if (!base) throw publicError(400, '无法生成参考图公开地址，请改用图片 URL。');
+  return `${base}/uploads/${filename}`;
+}
+
+function normalizeHttpImageUrl(value, fieldName = '参考图 URL') {
+  const url = String(value || '').trim();
+  if (!url) return '';
+  if (!/^https?:\/\//i.test(url)) throw publicError(400, `${fieldName} 必须是 http/https 图片地址。`);
+  return url.slice(0, 2000);
+}
+
+async function buildMediaImageUpstreamRequest({ model, prompt, size, quality, output_format, n, references }) {
+  if (!references.length) {
+    return {
+      path: '/images/generations',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, prompt, size, quality, output_format, n }),
+      referenceMode: false
+    };
+  }
+  const form = new FormData();
+  form.append('model', model);
+  form.append('prompt', prompt);
+  form.append('size', size);
+  form.append('quality', quality);
+  form.append('output_format', output_format);
+  form.append('n', String(n));
+  for (const ref of references) {
+    form.append('image', new Blob([ref.buffer], { type: ref.type || 'image/jpeg' }), ref.filename || 'reference.jpg');
+  }
+  return { path: '/images/edits', headers: {}, body: form, referenceMode: true };
+}
+
 function clientId(req) {
   const raw = `${getClientIp(req)}|${req.get('user-agent') || ''}`;
   return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 32);
@@ -1442,6 +1490,7 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
     const output_format = pickAllowed(req.body?.format || req.body?.output_format, ALLOWED_FORMATS, 'png');
     const quality = normalizeMediaImageQualityForModel(model, req.body?.quality);
     const n = normalizeCount(req.body?.n);
+    const referenceImages = await normalizeReferenceImages(req.body?.referenceImages || req.body?.reference_images || []);
     const salePrice = calculateMediaImagePrice(model, size, quality, n);
     await ensureMediaBalance(access, salePrice);
     const startedAt = Date.now();
@@ -1449,11 +1498,12 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     const mediaUpstreamKey = T8_MEDIA_API_KEY || apiKey;
     const imageBaseUrl = T8_MEDIA_API_KEY ? `${T8_MEDIA_API_BASE_URL}/v1` : API_BASE_URL;
-    const upstreamResp = await fetch(`${imageBaseUrl}/images/generations`, {
+    const upstreamRequest = await buildMediaImageUpstreamRequest({ model, prompt, size, quality, output_format, n, references: referenceImages });
+    const upstreamResp = await fetch(`${imageBaseUrl}${upstreamRequest.path}`, {
       method: 'POST',
       signal: controller.signal,
-      headers: { Authorization: `Bearer ${mediaUpstreamKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, prompt, size, quality, output_format, n })
+      headers: { Authorization: `Bearer ${mediaUpstreamKey}`, ...upstreamRequest.headers },
+      body: upstreamRequest.body
     }).finally(() => clearTimeout(timeout));
     const text = await upstreamResp.text();
     const data = parseJsonText(text);
@@ -1472,7 +1522,7 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
       model,
       amount: salePrice,
       upstreamCost: cost,
-      metadata: { size, quality, n, output_format, promptHash: hashSecret(prompt) }
+      metadata: { size, quality, n, output_format, referenceCount: referenceImages.length, promptHash: hashSecret(prompt) }
     });
     res.json({
       ok: true,
@@ -1484,6 +1534,7 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
       message: summarizeMediaImageSuccess({ images, billing: { charged: billing.amount } }),
       usage: data?.usage || null,
       elapsedMs: Date.now() - startedAt,
+      referenceMode: upstreamRequest.referenceMode,
       rawStatus: data?.status || null,
       access
     });
@@ -1506,7 +1557,10 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
     const duration = Number(req.body?.duration || modelInfo?.defaultDuration || 0);
     const body = { model, prompt };
     if (Number.isFinite(duration) && duration > 0 && !['wanx2.1-t2v-turbo', 'wan2.2-t2v-plus', 'grok-video-3'].includes(model)) body.duration = duration;
-    if (typeof req.body?.image_url === 'string' && req.body.image_url) body.image_url = req.body.image_url.slice(0, 2000);
+    const firstFrameUrl = normalizeHttpImageUrl(req.body?.image_url || req.body?.first_frame_url || req.body?.firstFrameUrl, '首帧图片 URL') || await saveMediaReferenceImageForUpstream(req.body?.firstFrameImage || req.body?.first_frame_image, req, 'first-frame');
+    const lastFrameUrl = normalizeHttpImageUrl(req.body?.end_image_url || req.body?.last_frame_url || req.body?.lastFrameUrl, '尾帧图片 URL') || await saveMediaReferenceImageForUpstream(req.body?.lastFrameImage || req.body?.last_frame_image, req, 'last-frame');
+    if (firstFrameUrl) body.image_url = firstFrameUrl;
+    if (lastFrameUrl) body.end_image_url = lastFrameUrl;
     if (typeof req.body?.aspect_ratio === 'string' && req.body.aspect_ratio) body.aspect_ratio = req.body.aspect_ratio.slice(0, 20);
     if (typeof req.body?.size === 'string' && req.body.size) body.size = req.body.size.slice(0, 40);
     const pendingCount = db.prepare(`SELECT COUNT(*) AS count FROM media_tasks WHERE api_key_id = ? AND billing_status = 'PENDING' AND created_at > ?`).get(String(access.keyId), Date.now() - 6 * 60 * 60 * 1000).count;
@@ -2108,5 +2162,6 @@ export {
   normalizeMediaImageQualityForModel,
   summarizeMediaImageSuccess,
   publicMediaErrorMessage,
-  extractMediaImages
+  extractMediaImages,
+  buildMediaImageUpstreamRequest
 };

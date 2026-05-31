@@ -11,6 +11,9 @@ assert.match(html, /referenceInput\.click\(\)/, 'add-more tile should reopen the
 assert.match(html, /canvas\.toDataURL\('image\/jpeg', quality\)/, 'frontend should encode uploaded reference images as JPEG before submit');
 assert.match(html, /const tryQualities = \[0\.78, 0\.68, 0\.58\]/, 'frontend should retry lower JPEG qualities when references are still large');
 assert.match(html, /compressedImages\.push\(await fileToCompressedDataUrl\(file\)\)/, 'frontend must submit compressed reference data URLs, not original FileReader output');
+assert.match(html, /mediaImageReferencesData\.push\(await fileToCompressedDataUrl\(file\)\)/, 'media image reference mode should also submit compressed data URLs');
+assert.match(html, /firstFrameImage: mediaVideoFrames\.first/, 'media video submission should include compressed first-frame image when present');
+assert.match(html, /lastFrameImage: mediaVideoFrames\.last/, 'media video submission should include compressed last-frame image when present');
 assert.doesNotMatch(html, /referenceImages\.push\(reader\.result\)|referenceImages\s*=\s*referenceImages\.concat\(reader\.result\)/, 'frontend must not submit raw uncompressed FileReader data URLs');
 assert.match(html, /4K（最长边 3840px，约 2-5 分钟）/, 'frontend should explain 4K as 3840px longest edge and set latency expectation');
 assert.match(html, /2K（最长边 2048px）/, 'frontend should explain 2K as 2048px longest edge');

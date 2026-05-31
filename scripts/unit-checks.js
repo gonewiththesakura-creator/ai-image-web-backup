@@ -17,7 +17,8 @@ import {
   MEDIA_IMAGE_PRICING,
   MEDIA_VIDEO_PRICING,
   calculateMediaImagePrice,
-  calculateMediaVideoPrice
+  calculateMediaVideoPrice,
+  buildMediaImageUpstreamRequest
 } from '../src/server.js';
 
 assert.equal(normalizeCount(4), 1, 'server should force one upstream image per request');
@@ -53,6 +54,13 @@ assert.equal(normalizedRefs[0].filename, 'reference-1.jpg', 'server should submi
 assert.ok(Buffer.isBuffer(normalizedRefs[0].buffer), 'server should submit a binary buffer');
 assert.ok(normalizedRefs[0].buffer.length > 100, 'compressed reference buffer should not be empty');
 assert.ok(normalizedRefs[0].buffer.length <= 900 * 1024, 'server should keep small references within compression target');
+const generationRequest = await buildMediaImageUpstreamRequest({ model: 'qwen-image', prompt: 'p', size: '1024x1024', quality: 'low', output_format: 'png', n: 1, references: [] });
+assert.equal(generationRequest.path, '/images/generations', 'media image without references should use generations endpoint');
+assert.equal(generationRequest.referenceMode, false, 'media image without references should not be marked reference mode');
+const editRequest = await buildMediaImageUpstreamRequest({ model: 'qwen-image', prompt: 'p', size: '1024x1024', quality: 'low', output_format: 'png', n: 1, references: normalizedRefs });
+assert.equal(editRequest.path, '/images/edits', 'media image with references should use edits endpoint');
+assert.equal(editRequest.referenceMode, true, 'media image with references should be marked reference mode');
+assert.ok(editRequest.body instanceof FormData, 'media image references should be sent as multipart form data');
 
 assert.equal(resolveImageRequestSettings({ size: '1024x1024', outputMode: '720p' }).finalSize, '1024x1024', '720P/standard should request base 1:1 size');
 assert.equal(resolveImageRequestSettings({ size: '1024x1024', outputMode: '1k' }).finalSize, '1024x1024', '1K should request 1024 longest-edge 1:1 size');
@@ -89,6 +97,14 @@ const enabledImages = MEDIA_IMAGE_MODELS.filter((item) => item.enabled).map((ite
 const enabledVideos = MEDIA_VIDEO_MODELS.filter((item) => item.enabled).map((item) => item.id);
 assert.deepEqual(enabledImages, expectedImageModels, 'all verified working image models should be enabled and exposed in a stable order');
 assert.deepEqual(enabledVideos, expectedVideoModels, 'all verified working video models should be enabled and exposed in a stable order');
+for (const id of ['qwen-image', 'gpt-image-1', 'gpt-image-1-mini', 'flux-kontext-pro', 'flux-kontext-max']) {
+  assert.equal(MEDIA_IMAGE_MODELS.find((item) => item.id === id)?.supportsReferenceImages, true, `${id} should advertise media reference-image support`);
+}
+for (const id of expectedVideoModels.filter((id) => id !== 'T2V-01')) {
+  assert.equal(MEDIA_VIDEO_MODELS.find((item) => item.id === id)?.supportsFirstFrame, true, `${id} should advertise first-frame video support`);
+  assert.equal(MEDIA_VIDEO_MODELS.find((item) => item.id === id)?.supportsLastFrame, true, `${id} should advertise last-frame video support`);
+}
+assert.equal(MEDIA_VIDEO_MODELS.find((item) => item.id === 'T2V-01')?.supportsFirstFrame, true, 'T2V-01 should advertise first-frame video support');
 for (const item of [...MEDIA_IMAGE_MODELS, ...MEDIA_VIDEO_MODELS]) {
   const publicCopy = `${item.name} ${item.note}`.toLowerCase();
   assert.equal(/t8|t8star|ai\.t8star/.test(publicCopy), false, `public media model copy must not leak upstream brand for ${item.id}`);
