@@ -191,15 +191,26 @@
     .sort-tabs button.active { background: #24211d; color: #fffaf2; }
     .small-note { color: var(--muted); font-size: 13px; line-height: 1.6; }
 
-    .media-card { padding: 26px; }
+    .media-card { padding: 26px; position: relative; overflow: hidden; border-color: rgba(155,128,96,.30); background: linear-gradient(145deg, rgba(255,253,249,.95), rgba(248,241,229,.88)); }
+    .media-card::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 92% 0%, rgba(206,171,104,.16), transparent 34%), radial-gradient(circle at 0% 100%, rgba(155,128,96,.10), transparent 30%); }
+    .media-card > * { position: relative; }
     .media-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
-    .media-head h2 { margin: 0; font-size: 20px; letter-spacing: -.35px; }
+    .media-head h2 { margin: 0; font-size: 20px; letter-spacing: -.35px; display: flex; align-items: center; gap: 10px; }
+    .media-vip-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 4px 9px; font-size: 11px; font-weight: 800; letter-spacing: .04em; color: #6f5425; background: linear-gradient(135deg, rgba(255,243,207,.92), rgba(234,213,168,.72)); border: 1px solid rgba(183,143,62,.35); box-shadow: 0 8px 22px rgba(155,128,96,.10); }
     .media-head p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .media-vip-note { margin-top: 9px; display: inline-flex; align-items: center; gap: 8px; color: #7d6337; background: rgba(255,247,229,.72); border: 1px solid rgba(183,143,62,.22); border-radius: 999px; padding: 6px 10px; font-size: 12px; line-height: 1.35; }
     .media-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
     .media-tabs button { background: rgba(36,33,29,.045); border: 1px solid var(--line); color: var(--muted); box-shadow: none; }
     .media-tabs button.active { background: #24211d; color: #fffaf2; }
     .media-grid { display: grid; grid-template-columns: minmax(320px, 440px) minmax(0, 1fr); gap: 18px; align-items: start; }
-    .media-box { border: 1px solid var(--line); border-radius: 24px; background: rgba(255,253,249,.70); padding: 16px; }
+    .media-box { border: 1px solid rgba(183,143,62,.20); border-radius: 24px; background: rgba(255,253,249,.76); padding: 16px; box-shadow: 0 16px 36px rgba(87,68,42,.06); }
+    .media-box.media-access-box { background: linear-gradient(180deg, rgba(255,253,249,.88), rgba(250,244,233,.82)); }
+    .media-key-label { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .media-key-label .media-vip-chip { display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 8px; font-size: 11px; font-weight: 800; color: #75582a; background: rgba(255,243,207,.82); border: 1px solid rgba(183,143,62,.28); }
+    .media-privileges { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0 14px; }
+    .media-privilege { border: 1px solid rgba(183,143,62,.18); background: rgba(255,250,241,.74); border-radius: 16px; padding: 9px 10px; }
+    .media-privilege strong { display: block; font-size: 12px; color: var(--text); margin-bottom: 2px; }
+    .media-privilege span { display: block; font-size: 11px; color: var(--muted); line-height: 1.35; }
     .media-model-list { display: grid; gap: 10px; max-height: 360px; overflow: auto; padding-right: 3px; }
     .model-option { width: 100%; display: block; text-align: left; border: 1px solid var(--line); background: rgba(250,247,241,.72); color: var(--text); border-radius: 18px; padding: 12px; box-shadow: none; }
     .model-option.active { background: #24211d; color: #fffaf2; }
@@ -278,6 +289,7 @@
       .gallery-tools input { width: 100%; }
 
       .media-grid { grid-template-columns: 1fr; }
+      .media-privileges { grid-template-columns: 1fr; }
       .chat-card { grid-template-columns: 1fr; max-height: none; overflow: visible; }
       .chat-sidebar { border-right: 0; border-bottom: 1px solid var(--line); padding: 12px; }
       .chat-session-actions { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
@@ -476,8 +488,9 @@
           <section class="card media-card" aria-label="媒体创作">
             <div class="media-head">
               <div>
-                <h2>媒体创作</h2>
+                <h2>媒体创作 <span class="media-vip-badge">VIP 专享</span></h2>
                 <p>图片和视频独立创作。视频提交后等待进度完成，成功显示预览；失败不扣费。</p>
+                <div class="media-vip-note">适用于媒体套餐 API Key，独立额度、独立任务记录、优先展示高阶影像能力。</div>
               </div>
               <div class="pill">Image + Video Studio</div>
             </div>
@@ -486,13 +499,18 @@
               <button id="mediaVideoTab" type="button">做视频</button>
             </div>
             <div class="media-grid">
-              <div class="media-box">
-                <label for="mediaApiKey">媒体创作 API Key</label>
+              <div class="media-box media-access-box">
+                <label for="mediaApiKey" class="media-key-label"><span>媒体创作 API Key</span><span class="media-vip-chip">VIP</span></label>
                 <div class="media-api-key-row">
                   <input id="mediaApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="请输入媒体套餐 API Key" />
                   <button id="syncMediaKeyBtn" type="button" class="secondary">沿用作图 Key</button>
                 </div>
                 <div class="hint">媒体创作使用单独的 API Key 输入框，和普通 gpt 作画分开保存。</div>
+                <div class="media-privileges" aria-label="媒体套餐权益">
+                  <div class="media-privilege"><strong>专属额度</strong><span>媒体套餐独立校验</span></div>
+                  <div class="media-privilege"><strong>高阶视频</strong><span>Seedance / Grok 能力</span></div>
+                  <div class="media-privilege"><strong>成功扣费</strong><span>失败任务不扣费</span></div>
+                </div>
 
                 <label for="mediaPrompt">创作描述</label>
                 <textarea id="mediaPrompt" maxlength="4000" placeholder="例如：一只白色猫咪在雨夜霓虹街头奔跑，电影感，浅景深"></textarea>
