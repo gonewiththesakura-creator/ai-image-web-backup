@@ -503,7 +503,7 @@
                 <label for="mediaApiKey" class="media-key-label"><span>媒体创作 API Key</span><span class="media-vip-chip">VIP</span></label>
                 <div class="media-api-key-row">
                   <input id="mediaApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="请输入媒体套餐 API Key" />
-                  <button id="syncMediaKeyBtn" type="button" class="secondary">沿用作图 Key</button>
+                  <button id="syncMediaKeyBtn" type="button" class="secondary">检测作图 Key</button>
                 </div>
                 <div class="hint">媒体创作使用单独的 API Key 输入框，和普通 gpt 作画分开保存。</div>
                 <div class="media-privileges" aria-label="媒体套餐权益">
@@ -1831,13 +1831,29 @@
 
     mediaImageTab.onclick = () => { mediaMode = 'image'; selectedMediaModel = ''; renderMediaModels(); };
     mediaVideoTab.onclick = () => { mediaMode = 'video'; selectedMediaModel = ''; renderMediaModels(); };
-    syncMediaKeyBtn.onclick = () => {
-      mediaApiKey.value = $('apiKey').value.trim();
-      if (mediaApiKey.value) {
+    syncMediaKeyBtn.onclick = async () => {
+      const candidateKey = $('apiKey').value.trim();
+      if (!candidateKey) {
+        setMediaStatus('普通作图 API Key 为空，请手动输入媒体套餐 API Key。', 'error');
+        return;
+      }
+      const previousText = syncMediaKeyBtn.textContent;
+      syncMediaKeyBtn.disabled = true;
+      syncMediaKeyBtn.textContent = '检测中...';
+      setMediaStatus('正在检测作图 Key 是否已开通媒体套餐...');
+      try {
+        const resp = await fetch(`${MEDIA_TASKS_ENDPOINT}?limit=1&apiKey=${encodeURIComponent(candidateKey)}`);
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || '该 Key 暂不能用于媒体创作。');
+        mediaApiKey.value = candidateKey;
         localStorage.setItem('dreamapi_media_key', mediaApiKey.value);
-        setMediaStatus('已沿用普通作图 API Key。', 'ok');
-      } else {
-        setMediaStatus('普通作图 API Key 为空，请手动输入媒体创作 API Key。', 'error');
+        setMediaStatus('检测通过，已填入媒体创作 API Key。', 'ok');
+        if (mediaHistoryExpanded) refreshMediaTasks();
+      } catch (err) {
+        setMediaStatus(err.message || '该作图 Key 未开通媒体套餐，请输入媒体套餐 API Key。', 'error');
+      } finally {
+        syncMediaKeyBtn.disabled = false;
+        syncMediaKeyBtn.textContent = previousText;
       }
     };
     mediaApiKey.addEventListener('change', () => localStorage.setItem('dreamapi_media_key', mediaApiKey.value.trim()));
