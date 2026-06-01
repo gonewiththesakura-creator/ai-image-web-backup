@@ -40,6 +40,16 @@
     .status { padding: 12px; border-radius: 8px; margin-bottom: 16px; text-align: center; }
     .status.error { background: rgba(251, 113, 133, 0.2); color: var(--red); }
     .status.success { background: rgba(52, 211, 153, 0.2); color: var(--green); }
+    .gallery-summary { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .gallery-summary-card { background: linear-gradient(145deg, rgba(79,140,255,.16), rgba(15,23,42,.78)); border: 1px solid rgba(79,140,255,.28); border-radius: 16px; padding: 18px; }
+    .gallery-summary-card strong { display:block; font-size: 28px; color: #93c5fd; margin-bottom: 5px; }
+    .gallery-summary-card span { color: var(--muted); font-size: 13px; }
+    .gallery-mini-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-bottom: 18px; }
+    .gallery-rank { display:flex; flex-direction:column; gap: 9px; }
+    .rank-item { display:grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items:center; padding: 10px; border: 1px solid rgba(148,163,184,.14); border-radius: 12px; background: rgba(2,6,23,.22); }
+    .rank-index { width: 28px; height: 28px; border-radius: 50%; display:grid; place-items:center; background: rgba(79,140,255,.20); color:#bfdbfe; font-weight:800; }
+    .rank-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size: 13px; }
+    .rank-num { color: var(--blue); font-weight:800; }
     .stats { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
     .stat-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
     .stat-value { font-size: 28px; font-weight: 800; color: var(--blue); margin-bottom: 6px; }
@@ -72,11 +82,16 @@
     .card img { width: 100%; height: 280px; object-fit: cover; display: block; }
     .card-body { padding: 16px; }
     .card-prompt { font-size: 13px; line-height: 1.5; color: var(--muted); margin: 0 0 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .card-meta { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+    .card-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+    .metric-edit { display:flex; align-items:center; gap: 6px; background: rgba(2,6,23,.28); border: 1px solid rgba(148,163,184,.14); border-radius: 10px; padding: 6px 8px; }
+    .metric-edit span { white-space: nowrap; color: var(--muted); }
+    .metric-edit input { margin:0; padding: 7px 8px; min-width:0; }
+    .card-actions { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .save-btn { width: 100%; background: linear-gradient(135deg, var(--green), #059669); padding: 8px; margin: 0; }
     .delete-btn { width: 100%; background: linear-gradient(135deg, var(--red), #e11d48); padding: 8px; margin: 0; }
     .load-more { text-align: center; margin: 32px 0; }
     .load-more button { width: auto; min-width: 200px; }
-    @media (max-width: 900px) { .stats { grid-template-columns: repeat(2, 1fr); } .monitor-grid { grid-template-columns: 1fr; } .topbar { align-items:flex-start; flex-direction:column; } }
+    @media (max-width: 900px) { .stats, .gallery-summary { grid-template-columns: repeat(2, 1fr); } .monitor-grid, .gallery-mini-grid { grid-template-columns: 1fr; } .topbar { align-items:flex-start; flex-direction:column; } }
     @media (max-width: 560px) { body { padding:14px; } .stats { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -158,11 +173,17 @@
       </section>
 
       <section id="gallerySection" class="hidden">
-        <div class="stats">
-          <div class="stat-card"><div class="stat-value" id="totalCount">0</div><div class="stat-label">总作品数</div></div>
-          <div class="stat-card"><div class="stat-value" id="totalLikes">0</div><div class="stat-label">当前加载点赞数</div></div>
-          <div class="stat-card"><div class="stat-value" id="totalViews">0</div><div class="stat-label">当前加载浏览数</div></div>
+        <div class="gallery-summary">
+          <div class="gallery-summary-card"><strong id="totalCount">0</strong><span>总作品数</span></div>
+          <div class="gallery-summary-card"><strong id="totalLikes">0</strong><span>全站点赞数</span></div>
+          <div class="gallery-summary-card"><strong id="totalViews">0</strong><span>全站套用数</span></div>
+          <div class="gallery-summary-card"><strong id="avgEngagement">0</strong><span>平均互动 / 作品</span></div>
         </div>
+        <div class="gallery-mini-grid">
+          <div class="panel"><h2>点赞最高</h2><div id="topLikedList" class="gallery-rank"></div></div>
+          <div class="panel"><h2>套用最多</h2><div id="topUsedList" class="gallery-rank"></div></div>
+        </div>
+        <div class="subtitle">每张作品可直接修改点赞数和套用数，保存后前台画廊立即按新数据展示。</div>
         <div id="gallery" class="grid"></div>
         <div id="loadMoreWrap" class="load-more hidden"><button id="loadMoreBtn">加载更多</button></div>
       </section>
@@ -308,19 +329,52 @@
         hasMore = data.hasMore;
         offset += data.items.length;
         renderGallery();
-        updateStats(data.total);
+        await loadGallerySummary();
         loadMoreWrap.classList.toggle('hidden', !hasMore);
       } catch (err) { showStatus(err.message || '加载失败', 'error'); }
     }
 
-    function updateStats(total) {
+    async function loadGallerySummary() {
+      if (!password) return;
+      const data = await adminFetch('/api/admin/gallery-summary');
+      updateStats(data.summary || {});
+      renderRankList('topLikedList', data.topLiked || [], 'likes', '❤️');
+      renderRankList('topUsedList', data.topUsed || [], 'views', '✦');
+    }
+
+    function updateStats(summary = {}) {
+      const total = Number(summary.total ?? items.length);
+      const likes = Number(summary.likes ?? items.reduce((sum, item) => sum + Number(item.likes || 0), 0));
+      const views = Number(summary.views ?? items.reduce((sum, item) => sum + Number(item.views || 0), 0));
       $('totalCount').textContent = fmt(total);
-      $('totalLikes').textContent = fmt(items.reduce((sum, item) => sum + item.likes, 0));
-      $('totalViews').textContent = fmt(items.reduce((sum, item) => sum + item.views, 0));
+      $('totalLikes').textContent = fmt(likes);
+      $('totalViews').textContent = fmt(views);
+      $('avgEngagement').textContent = total ? fmt(Math.round((likes + views) / total)) : '0';
+    }
+
+    function renderRankList(id, rows, key, icon) {
+      $(id).innerHTML = rows.map((item, idx) => `<div class="rank-item"><div class="rank-index">${idx + 1}</div><div class="rank-title" title="${escapeHtml(item.prompt)}">${escapeHtml(item.prompt)}</div><div class="rank-num">${icon} ${fmt(item[key])}</div></div>`).join('') || '<div style="color:var(--muted)">暂无作品</div>';
     }
 
     function renderGallery() {
-      gallery.innerHTML = items.map(item => `<div class="card" data-id="${escapeHtml(item.id)}"><img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.prompt)}" /><div class="card-body"><p class="card-prompt">${escapeHtml(item.prompt)}</p><div class="card-meta"><span>❤️ ${fmt(item.likes)}</span><span>👁️ ${fmt(item.views)}</span></div><button class="delete-btn" type="button" data-delete-id="${escapeHtml(item.id)}">🗑️ 删除</button></div></div>`).join('');
+      gallery.innerHTML = items.map(item => `<div class="card" data-id="${escapeHtml(item.id)}"><img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.prompt)}" /><div class="card-body"><p class="card-prompt">${escapeHtml(item.prompt)}</p><div class="card-meta"><label class="metric-edit"><span>❤️ 点赞</span><input type="number" min="0" step="1" value="${Number(item.likes || 0)}" data-metric="likes" data-id="${escapeHtml(item.id)}" /></label><label class="metric-edit"><span>✦ 套用</span><input type="number" min="0" step="1" value="${Number(item.views || 0)}" data-metric="views" data-id="${escapeHtml(item.id)}" /></label></div><div class="card-actions"><button class="save-btn" type="button" data-save-id="${escapeHtml(item.id)}">保存数据</button><button class="delete-btn" type="button" data-delete-id="${escapeHtml(item.id)}">🗑️ 删除</button></div></div></div>`).join('');
+    }
+
+    async function saveMetrics(id) {
+      const card = gallery.querySelector(`[data-id="${CSS.escape(id)}"]`);
+      const likes = Number(card?.querySelector('[data-metric="likes"]')?.value);
+      const views = Number(card?.querySelector('[data-metric="views"]')?.value);
+      if (!Number.isFinite(likes) || likes < 0 || !Number.isFinite(views) || views < 0) return showStatus('点赞数和套用数必须是 0 或更大的数字。', 'error');
+      try {
+        const data = await adminFetch(`${API_BASE}/${encodeURIComponent(id)}/metrics`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ likes: Math.floor(likes), views: Math.floor(views) }) });
+        const idx = items.findIndex(item => item.id === id);
+        if (idx >= 0 && data.item) items[idx] = data.item;
+        renderGallery();
+        await loadGallerySummary();
+        showStatus('点赞数和套用数已保存', 'success');
+      } catch (err) {
+        showStatus(err.message || '保存失败', 'error');
+      }
     }
 
     async function deleteItem(id) {
@@ -330,7 +384,7 @@
         items = items.filter(item => item.id !== id);
         renderGallery();
         showStatus('删除成功', 'success');
-        updateStats(parseInt($('totalCount').textContent.replace(/,/g,'')) - 1);
+        await loadGallerySummary();
         loadMonitor().catch(err => showStatus(`统计暂不可用：${err.message || '统计加载失败'}。`, 'error'));
       } catch (err) {
         if (/管理员密码错误|未登录|403/i.test(String(err.message || ''))) {
@@ -358,7 +412,12 @@
     ]).then(() => showStatus('刷新完成', 'success')).catch(err => showStatus(err.message || '刷新失败', 'error'));
     $('monitorDays').onchange = () => loadMonitor().catch(err => showStatus(`统计暂不可用：${err.message || '统计加载失败'}。`, 'error'));
     document.querySelectorAll('.tab-btn').forEach(btn => btn.onclick = () => switchTab(btn.dataset.tab));
-    gallery.addEventListener('click', (event) => { const btn = event.target.closest('[data-delete-id]'); if (btn) deleteItem(btn.dataset.deleteId); });
+    gallery.addEventListener('click', (event) => {
+      const saveBtn = event.target.closest('[data-save-id]');
+      if (saveBtn) return saveMetrics(saveBtn.dataset.saveId);
+      const deleteBtn = event.target.closest('[data-delete-id]');
+      if (deleteBtn) return deleteItem(deleteBtn.dataset.deleteId);
+    });
 
     const savedPassword = localStorage.getItem('admin_password');
     if (savedPassword) { passwordInput.value = savedPassword; login(); }

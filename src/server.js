@@ -305,6 +305,36 @@ app.get('/api/admin/verify', (req, res) => {
   res.json({ ok: true });
 });
 
+app.get('/api/admin/gallery-summary', (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const summary = db.prepare(`
+    SELECT
+      COUNT(*) AS total,
+      COALESCE(SUM(likes), 0) AS likes,
+      COALESCE(SUM(views), 0) AS views,
+      COALESCE(AVG(likes), 0) AS avgLikes,
+      COALESCE(AVG(views), 0) AS avgViews,
+      COALESCE(MAX(likes), 0) AS maxLikes,
+      COALESCE(MAX(views), 0) AS maxViews
+    FROM gallery_items
+  `).get();
+  const topLiked = db.prepare('SELECT id, prompt, image_url, format, likes, views, created_at FROM gallery_items ORDER BY likes DESC, views DESC, created_at DESC LIMIT 8').all();
+  const topUsed = db.prepare('SELECT id, prompt, image_url, format, likes, views, created_at FROM gallery_items ORDER BY views DESC, likes DESC, created_at DESC LIMIT 8').all();
+  res.json({
+    summary: {
+      total: Number(summary.total || 0),
+      likes: Number(summary.likes || 0),
+      views: Number(summary.views || 0),
+      avgLikes: Number(summary.avgLikes || 0),
+      avgViews: Number(summary.avgViews || 0),
+      maxLikes: Number(summary.maxLikes || 0),
+      maxViews: Number(summary.maxViews || 0)
+    },
+    topLiked: topLiked.map((row) => rowToPublic(row)),
+    topUsed: topUsed.map((row) => rowToPublic(row))
+  });
+});
+
 function requireAdmin(req, res) {
   const password = req.body?.password || req.headers['x-admin-password'];
   if (password !== ADMIN_PASSWORD) {
@@ -2162,6 +2192,29 @@ app.post('/api/gallery/:id/view', (req, res) => {
   const liked = db.prepare('SELECT 1 FROM gallery_likes WHERE item_id = ? AND client_id = ?').get(id, cid) !== undefined;
   
   res.json({ item: rowToPublic(row, liked) });
+});
+
+app.patch('/api/gallery/:id/metrics', rateLimit({ windowMs: 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false }), (req, res) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+    const id = String(req.params.id || '').slice(0, 80);
+    const item = db.prepare('SELECT * FROM gallery_items WHERE id = ?').get(id);
+    if (!item) return res.status(404).json({ error: '作品不存在。' });
+
+    const likes = Math.min(Math.max(Math.floor(Number(req.body?.likes)), 0), 999999999);
+    const views = Math.min(Math.max(Math.floor(Number(req.body?.views)), 0), 999999999);
+    if (!Number.isFinite(likes) || !Number.isFinite(views)) {
+      return res.status(400).json({ error: '点赞数和套用数必须是 0 或更大的数字。' });
+    }
+
+    db.prepare('UPDATE gallery_items SET likes = ?, views = ? WHERE id = ?').run(likes, views, id);
+    db.prepare('DELETE FROM gallery_likes WHERE item_id = ?').run(id);
+    const row = db.prepare('SELECT * FROM gallery_items WHERE id = ?').get(id);
+    res.json({ item: rowToPublic(row), message: '数据已更新。' });
+  } catch (err) {
+    const status = err.status || 500;
+    res.status(status).json({ error: status >= 500 ? '更新失败，请稍后重试。' : err.message });
+  }
 });
 
 app.delete('/api/gallery/:id', rateLimit({ windowMs: 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false }), (req, res) => {

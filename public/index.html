@@ -179,6 +179,7 @@
     .side-actions { position: absolute; right: 11px; bottom: 14px; display: grid; gap: 10px; justify-items: center; }
     .round-action { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.34); background: rgba(36,33,29,.42); color: white; box-shadow: none; backdrop-filter: blur(14px); margin: 0; padding: 0; font-size: 21px; min-width: 0; }
     .round-action.liked, .round-action:hover { background: rgba(36,33,29,.88); transform: translateY(-1px); }
+    .round-action.like-btn.liked { color: #fff; background: linear-gradient(135deg, #ff4d6d, #e11d48); border-color: rgba(255,255,255,.78); box-shadow: 0 12px 28px rgba(225,29,72,.34); }
     .round-label { color: white; font-size: 12px; font-weight: 700; text-shadow: 0 1px 8px rgba(0,0,0,.55); margin-top: -7px; }
     .heart-pop { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.4); font-size: 96px; opacity: 0; pointer-events: none; z-index: 40; filter: drop-shadow(0 12px 26px rgba(0,0,0,.30)); }
     .heart-pop.show { animation: heartPop .72s ease both; }
@@ -1335,6 +1336,8 @@
         item.liked = true;
         likeCountLabel.textContent = item.likes;
         button.classList.add('liked');
+        button.setAttribute('aria-pressed', 'true');
+        button.title = '已点赞';
         popHeart();
       } else {
         // 当前已点赞，执行取消点赞
@@ -1342,6 +1345,8 @@
         item.liked = false;
         likeCountLabel.textContent = item.likes;
         button.classList.remove('liked');
+        button.setAttribute('aria-pressed', 'false');
+        button.title = '点赞';
       }
       
       try {
@@ -1361,22 +1366,18 @@
         }
         if (data.liked !== undefined) {
           item.liked = data.liked;
-          if (data.liked) {
-            button.classList.add('liked');
-          } else {
-            button.classList.remove('liked');
-          }
+          button.classList.toggle('liked', Boolean(data.liked));
+          button.setAttribute('aria-pressed', data.liked ? 'true' : 'false');
+          button.title = data.liked ? '已点赞' : '点赞';
         }
       } catch (err) {
         // 失败时回滚
         item.likes = originalLikes;
         item.liked = originalLiked;
         likeCountLabel.textContent = originalLikes;
-        if (originalLiked) {
-          button.classList.add('liked');
-        } else {
-          button.classList.remove('liked');
-        }
+        button.classList.toggle('liked', Boolean(originalLiked));
+        button.setAttribute('aria-pressed', originalLiked ? 'true' : 'false');
+        button.title = originalLiked ? '已点赞' : '点赞';
         showToast(err.message || '操作失败');
       } finally {
         button.disabled = false;
@@ -1414,7 +1415,7 @@
           <div class="feed-gradient"></div>
           <div class="feed-caption">${escapeHtml(item.prompt)}</div>
           <div class="side-actions">
-            <button type="button" class="round-action like-btn ${item.liked ? 'liked' : ''}" title="点赞">❤</button>
+            <button type="button" class="round-action like-btn ${item.liked ? 'liked' : ''}" aria-pressed="${item.liked ? 'true' : 'false'}" title="${item.liked ? '已点赞' : '点赞'}">❤</button>
             <div class="round-label like-count">${item.likes}</div>
             <button type="button" class="round-action use-btn" title="套用提示词">✦</button>
             <div class="round-label">套用</div>
