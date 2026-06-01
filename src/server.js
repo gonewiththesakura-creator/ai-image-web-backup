@@ -908,7 +908,7 @@ async function requireMediaApiKeyAccess(apiKey) {
         )
     ) AS has_media_plan`);
     const result = await sub2apiPool.query(
-      `SELECT ${select.join(', ')} FROM api_keys k LEFT JOIN groups g ON g.id = k.group_id WHERE k.key = $1 LIMIT 1`,
+      `SELECT ${select.join(', ')} FROM api_keys k LEFT JOIN groups g ON g.id = k.group_id WHERE k.key = $1 AND k.deleted_at IS NULL LIMIT 1`,
       [normalized]
     );
     const row = result.rows[0];
