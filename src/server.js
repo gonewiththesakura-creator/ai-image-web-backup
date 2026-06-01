@@ -570,7 +570,7 @@ const MEDIA_VIDEO_MODELS = [
   { id: 'doubao-seedance-1-5-pro-251215', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 1.5 Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 2.00, defaultDuration: 5, enabled: true, note: '可选 5 秒/10 秒，按时长计费；失败不扣费。' },
   { id: 'doubao-seedance-2-0-fast-260128', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 2 Fast 视频', type: 'video', tier: 'ultra', unit: '次', estimatedDreamPoints: 8.00, defaultDuration: 5, enabled: true, note: '按 5 秒/10 秒档位计费；失败不扣费。' },
   { id: 'doubao-seedance-2-0-260128', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 2 Pro 视频', type: 'video', tier: 'ultra', unit: '次', estimatedDreamPoints: 9.00, defaultDuration: 5, enabled: true, note: '按 5 秒/10 秒档位计费；失败不扣费。' },
-  { id: 'grok-video-3', supportsFirstFrame: false, supportsLastFrame: false, name: 'Grok 视频', type: 'video', tier: 'beta', unit: '次', estimatedDreamPoints: 1.00, defaultDuration: 5, enabled: true, note: '引流短视频，固定按次计费；失败不扣费。' }
+  { id: 'grok-video-3', supportsFirstFrame: false, supportsLastFrame: false, name: 'Grok 视频', type: 'video', tier: 'beta', unit: '次', estimatedDreamPoints: 2.00, defaultDuration: 5, enabled: true, note: '固定按次计费；失败不扣费。' }
 ];
 
 const MEDIA_MODEL_MAP = new Map([...MEDIA_IMAGE_MODELS, ...MEDIA_VIDEO_MODELS].map((item) => [item.id, item]));
@@ -604,7 +604,7 @@ const MEDIA_VIDEO_PRICING = {
   'doubao-seedance-1-5-pro-251215': { unit: 'second', rate: 0.40, minDuration: 5, maxDuration: 10 },
   'doubao-seedance-2-0-fast-260128': { unit: 'second', rate: 1.60, minDuration: 5, maxDuration: 10 },
   'doubao-seedance-2-0-260128': { unit: 'second', rate: 1.80, minDuration: 5, maxDuration: 10 },
-  'grok-video-3': { unit: 'request', price: 1.00 }
+  'grok-video-3': { unit: 'request', price: 2.00 }
 };
 const VIDEO_API_BASE_URL = (process.env.VIDEO_API_BASE_URL || API_BASE_URL.replace(/\/v1$/, '')).replace(/\/$/, '');
 const MEDIA_REQUIRE_EXCLUSIVE_GROUP = String(process.env.MEDIA_REQUIRE_EXCLUSIVE_GROUP || '1') !== '0';
