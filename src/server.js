@@ -1610,10 +1610,11 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
     const body = { model, prompt };
     if (Number.isFinite(duration) && duration > 0 && model !== 'grok-video-3') body.duration = duration;
     if (size) body.size = size;
-    const firstFrameUrl = normalizeHttpImageUrl(req.body?.image_url || req.body?.first_frame_url || req.body?.firstFrameUrl, '首帧图片 URL') || await saveMediaReferenceImageForUpstream(req.body?.firstFrameImage || req.body?.first_frame_image, req, 'first-frame');
-    const lastFrameUrl = normalizeHttpImageUrl(req.body?.end_image_url || req.body?.last_frame_url || req.body?.lastFrameUrl, '尾帧图片 URL') || await saveMediaReferenceImageForUpstream(req.body?.lastFrameImage || req.body?.last_frame_image, req, 'last-frame');
-    if (firstFrameUrl && modelInfo?.supportsFirstFrame) body.image_url = firstFrameUrl;
-    if (lastFrameUrl && modelInfo?.supportsLastFrame) body.end_image_url = lastFrameUrl;
+    const firstFrameUrl = normalizeHttpImageUrl(req.body?.image_url || req.body?.first_frame_url || req.body?.firstFrameUrl, '首帧图片 URL');
+    const lastFrameUrl = normalizeHttpImageUrl(req.body?.end_image_url || req.body?.last_frame_url || req.body?.lastFrameUrl, '尾帧图片 URL');
+    if (firstFrameUrl || lastFrameUrl || req.body?.firstFrameImage || req.body?.first_frame_image || req.body?.lastFrameImage || req.body?.last_frame_image) {
+      throw publicError(400, '视频暂不支持首尾帧参考图，请直接用文字描述生成视频。');
+    }
     const pendingCount = db.prepare(`SELECT COUNT(*) AS count FROM media_tasks WHERE api_key_id = ? AND billing_status = 'PENDING' AND created_at > ?`).get(String(access.keyId), Date.now() - 6 * 60 * 60 * 1000).count;
     if (Number(pendingCount || 0) >= 3) throw publicError(429, '当前 API Key 有过多视频任务待完成，请等待任务完成后再提交。');
     const pricing = calculateMediaVideoPrice(model, duration);

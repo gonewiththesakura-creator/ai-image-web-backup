@@ -520,21 +520,6 @@
                   <div class="hint">最多 3 张。用于图像语义编辑或风格参考；会自动压缩后提交。</div>
                   <div id="mediaImageRefPreview" class="ref-preview"></div>
                 </div>
-                <div id="mediaVideoFrameBox" class="ref-box media-ref-box" style="display:none;">
-                  <div class="ref-title"><span>视频参考帧</span><span class="ref-mode" id="mediaVideoFrameModeText">未上传</span></div>
-                  <div class="grid2">
-                    <div>
-                      <label for="mediaFirstFrame">首帧</label>
-                      <input id="mediaFirstFrame" type="file" accept="image/png,image/jpeg,image/webp" />
-                    </div>
-                    <div>
-                      <label for="mediaLastFrame">尾帧</label>
-                      <input id="mediaLastFrame" type="file" accept="image/png,image/jpeg,image/webp" />
-                    </div>
-                  </div>
-                  <div class="hint">可只上传首帧，也可同时上传首尾帧；模型不支持时上游会返回失败且不扣费。</div>
-                  <div id="mediaVideoFramePreview" class="ref-preview"></div>
-                </div>
                 <div class="grid2">
                   <div>
                     <label for="mediaSize">图片规格</label>
@@ -690,11 +675,6 @@
     const mediaImageReferences = $('mediaImageReferences');
     const mediaImageRefPreview = $('mediaImageRefPreview');
     const mediaImageRefModeText = $('mediaImageRefModeText');
-    const mediaVideoFrameBox = $('mediaVideoFrameBox');
-    const mediaFirstFrame = $('mediaFirstFrame');
-    const mediaLastFrame = $('mediaLastFrame');
-    const mediaVideoFramePreview = $('mediaVideoFramePreview');
-    const mediaVideoFrameModeText = $('mediaVideoFrameModeText');
     const mediaSize = $('mediaSize');
     const mediaQuality = $('mediaQuality');
     const mediaDuration = $('mediaDuration');
@@ -735,7 +715,6 @@
     let mediaModels = { image: [], video: [] };
     let selectedMediaModel = '';
     let mediaImageReferencesData = [];
-    let mediaVideoFrames = { first: '', last: '' };
     let mediaProgressTimer = null;
     let mediaHistoryExpanded = false;
 
@@ -1523,21 +1502,6 @@
       `).join('');
     }
 
-    function renderMediaVideoFramePreview() {
-      if (!mediaVideoFramePreview) return;
-      const items = [];
-      if (mediaVideoFrames.first) items.push({ key: 'first', label: '首帧', src: mediaVideoFrames.first });
-      if (mediaVideoFrames.last) items.push({ key: 'last', label: '尾帧', src: mediaVideoFrames.last });
-      mediaVideoFrameModeText.textContent = items.length ? `已启用：${items.map((i) => i.label).join(' + ')}` : '未上传';
-      mediaVideoFramePreview.innerHTML = items.map((item) => `
-        <div class="ref-thumb">
-          <img src="${escapeHtml(item.src)}" alt="${escapeHtml(item.label)}" />
-          <button type="button" data-remove-media-frame="${escapeHtml(item.key)}" aria-label="移除${escapeHtml(item.label)}">×</button>
-          <span>${escapeHtml(item.label)}</span>
-        </div>
-      `).join('');
-    }
-
     async function handleMediaImageReferences(files) {
       const list = Array.from(files || []);
       if (!list.length) return;
@@ -1552,21 +1516,6 @@
         showToast(err.message || '参考图处理失败');
       } finally {
         mediaImageReferences.value = '';
-      }
-    }
-
-    async function handleMediaVideoFrame(kind, files) {
-      const file = Array.from(files || [])[0];
-      if (!file) return;
-      try {
-        mediaVideoFrames[kind] = await fileToCompressedDataUrl(file);
-        renderMediaVideoFramePreview();
-        showToast(kind === 'first' ? '已添加视频首帧' : '已添加视频尾帧');
-      } catch (err) {
-        showToast(err.message || '参考帧处理失败');
-      } finally {
-        if (kind === 'first') mediaFirstFrame.value = '';
-        else mediaLastFrame.value = '';
       }
     }
 
@@ -1690,7 +1639,6 @@
       const imageControls = [mediaSize?.closest('div'), mediaQuality?.closest('div')];
       imageControls.forEach((el) => { if (el) el.style.display = mediaMode === 'image' ? 'block' : 'none'; });
       if (mediaImageRefBox) mediaImageRefBox.style.display = mediaMode === 'image' ? 'block' : 'none';
-      if (mediaVideoFrameBox) mediaVideoFrameBox.style.display = mediaMode === 'video' ? 'block' : 'none';
       mediaDuration.closest('div').style.display = mediaMode === 'video' ? 'block' : 'none';
       mediaAspect.closest('div').style.display = mediaMode === 'video' ? 'block' : 'none';
       submitMediaBtn.textContent = mediaMode === 'video' ? '提交视频任务' : '提交图片生成';
@@ -1741,7 +1689,7 @@
       try {
         const endpoint = mediaMode === 'video' ? MEDIA_VIDEO_ENDPOINT : MEDIA_IMAGE_ENDPOINT;
         const payload = mediaMode === 'video'
-          ? { apiKey, model: selectedMediaModel, prompt, duration: Number(mediaDuration.value), aspect_ratio: mediaAspect.value, firstFrameImage: mediaVideoFrames.first || undefined, lastFrameImage: mediaVideoFrames.last || undefined }
+          ? { apiKey, model: selectedMediaModel, prompt, duration: Number(mediaDuration.value), aspect_ratio: mediaAspect.value }
           : { apiKey, model: selectedMediaModel, prompt, size: mediaSize.value || $('sizePreset').value, format: $('format').value, quality: 'auto', n: 1, referenceImages: mediaImageReferencesData };
         const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const data = await resp.json().catch(() => ({}));
@@ -1865,19 +1813,11 @@
     };
     mediaApiKey.addEventListener('change', () => localStorage.setItem('dreamapi_media_key', mediaApiKey.value.trim()));
     mediaImageReferences?.addEventListener('change', (ev) => handleMediaImageReferences(ev.target.files));
-    mediaFirstFrame?.addEventListener('change', (ev) => handleMediaVideoFrame('first', ev.target.files));
-    mediaLastFrame?.addEventListener('change', (ev) => handleMediaVideoFrame('last', ev.target.files));
     mediaImageRefPreview?.addEventListener('click', (ev) => {
       const btn = ev.target.closest('[data-remove-media-ref]');
       if (!btn) return;
       mediaImageReferencesData.splice(Number(btn.dataset.removeMediaRef), 1);
       renderMediaImageRefPreview();
-    });
-    mediaVideoFramePreview?.addEventListener('click', (ev) => {
-      const btn = ev.target.closest('[data-remove-media-frame]');
-      if (!btn) return;
-      mediaVideoFrames[btn.dataset.removeMediaFrame] = '';
-      renderMediaVideoFramePreview();
     });
     toggleMediaHistoryBtn.onclick = () => {
       mediaHistoryExpanded = !mediaHistoryExpanded;
