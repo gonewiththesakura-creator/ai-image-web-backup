@@ -785,6 +785,19 @@ async function applyMediaBalanceEvent({ access, eventType, taskType, model, amou
     `, [usageLogId, userId, apiKeyId, credit ? value : -value]);
     await client.query(`UPDATE users SET balance = balance ${credit ? '+' : '-'} $1, updated_at = now() WHERE id = $2`, [value, userId]);
     await client.query(`UPDATE api_keys SET quota_used = GREATEST(0, COALESCE(quota_used,0) ${credit ? '-' : '+'} $1), updated_at = now() WHERE id = $2`, [value, apiKeyId]);
+    await client.query(`
+      UPDATE user_subscriptions
+      SET daily_usage_usd = GREATEST(0, COALESCE(daily_usage_usd,0) ${credit ? '-' : '+'} $1),
+          weekly_usage_usd = GREATEST(0, COALESCE(weekly_usage_usd,0) ${credit ? '-' : '+'} $1),
+          monthly_usage_usd = GREATEST(0, COALESCE(monthly_usage_usd,0) ${credit ? '-' : '+'} $1),
+          updated_at = now()
+      WHERE user_id = $2
+        AND group_id = $3
+        AND status = 'active'
+        AND deleted_at IS NULL
+        AND starts_at <= now()
+        AND (expires_at IS NULL OR expires_at > now())
+    `, [value, userId, access.groupId]);
     await client.query('COMMIT');
     db.prepare(`
       INSERT INTO media_billing_events (id, task_id, event_type, task_type, model, user_id, api_key_id, amount, upstream_cost, status, usage_log_id, billing_entry_id, metadata_json, created_at)
