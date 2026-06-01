@@ -574,10 +574,10 @@ const MEDIA_IMAGE_MODELS = [
 ];
 
 const MEDIA_VIDEO_MODELS = [
-  { id: 'wanx2.1-t2v-turbo', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance Fast 视频', type: 'video', tier: 'fast', unit: '秒', estimatedDreamPoints: 0.10, defaultDuration: 5, enabled: true, note: '按秒计费，适合低成本快速成片。' },
-  { id: 'wanx2.1-t2v-plus', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 1 Pro 视频', type: 'video', tier: 'pro', unit: '秒', estimatedDreamPoints: 0.20, defaultDuration: 5, enabled: true, note: '按秒计费，适合更稳定画质。' },
-  { id: 'wan2.2-t2v-plus', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 1.5 Pro 视频', type: 'video', tier: 'pro', unit: '秒', estimatedDreamPoints: 0.30, defaultDuration: 5, enabled: true, note: '按秒计费，适合高质量短片。' },
-  { id: 'veo3.1-fast', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 2 Pro 视频', type: 'video', tier: 'ultra', unit: '秒', estimatedDreamPoints: 1.50, defaultDuration: 5, enabled: true, note: '按秒计费，旗舰视频能力。' },
+  { id: 'wanx2.1-t2v-turbo', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 3.00, defaultDuration: 5, enabled: true, note: '按次计费，当前上游不支持自定义时长；失败不扣费。' },
+  { id: 'wanx2.1-t2v-plus', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 1 Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 4.00, defaultDuration: 5, enabled: true, note: '按次计费，当前上游不支持自定义时长；失败不扣费。' },
+  { id: 'wan2.2-t2v-plus', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 1.5 Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 5.00, defaultDuration: 5, enabled: true, note: '按次计费，当前上游不支持自定义时长；失败不扣费。' },
+  { id: 'veo3.1-fast', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 2 Pro 视频', type: 'video', tier: 'ultra', unit: '次', estimatedDreamPoints: 12.00, defaultDuration: 5, enabled: false, note: '旗舰视频能力待成本复核后开放；失败不扣费。' },
   { id: 'grok-video-3', supportsFirstFrame: true, supportsLastFrame: false, name: 'Grok 视频', type: 'video', tier: 'beta', unit: '次', estimatedDreamPoints: 0.85, defaultDuration: 5, enabled: true, note: '按次计费，Beta 能力稳定性可能波动；失败不扣费。' }
 ];
 
@@ -608,10 +608,10 @@ const MEDIA_SIZE_MULTIPLIERS = {
 };
 const MEDIA_QUALITY_MULTIPLIERS = { low: 1, medium: 1, auto: 1, high: 1 };
 const MEDIA_VIDEO_PRICING = {
-  'wanx2.1-t2v-turbo': { unit: 'second', rate: 0.10, minDuration: 2, maxDuration: 10 },
-  'wanx2.1-t2v-plus': { unit: 'second', rate: 0.20, minDuration: 2, maxDuration: 10 },
-  'wan2.2-t2v-plus': { unit: 'second', rate: 0.30, minDuration: 2, maxDuration: 10 },
-  'veo3.1-fast': { unit: 'second', rate: 1.50, minDuration: 2, maxDuration: 10 },
+  'wanx2.1-t2v-turbo': { unit: 'request', price: 3.00 },
+  'wanx2.1-t2v-plus': { unit: 'request', price: 4.00 },
+  'wan2.2-t2v-plus': { unit: 'request', price: 5.00 },
+  'veo3.1-fast': { unit: 'request', price: 12.00 },
   'grok-video-3': { unit: 'request', price: 0.85 }
 };
 const VIDEO_API_BASE_URL = (process.env.VIDEO_API_BASE_URL || API_BASE_URL.replace(/\/v1$/, '')).replace(/\/$/, '');

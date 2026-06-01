@@ -81,7 +81,6 @@ const expectedVideoModels = [
   'wanx2.1-t2v-turbo',
   'wanx2.1-t2v-plus',
   'wan2.2-t2v-plus',
-  'veo3.1-fast',
   'grok-video-3'
 ];
 const enabledImages = MEDIA_IMAGE_MODELS.filter((item) => item.enabled).map((item) => item.id);
@@ -115,14 +114,13 @@ assert.equal(calculateMediaImagePrice('gpt-image-2', '1024x1024', 'low', 1), 0.4
 assert.equal(calculateMediaImagePrice('gpt-image-2', '2048x2048', 'high', 1), 0.80, 'flagship image2 2K anchor price should be 0.8 Dream points and ignore high quality labels');
 assert.equal(calculateMediaImagePrice('gpt-image-2', '3840x3840', 'auto', 1), 1.20, 'flagship image2 4K anchor price should be 1.2 Dream points');
 assert.equal(calculateMediaImagePrice('grok-4.1-image', '3840x2160', 'low', 2), 2.40, '4K pricing should be 3x per image and multiply by count');
-assert.deepEqual(calculateMediaVideoPrice('wanx2.1-t2v-turbo', 5), { hold: 0.5, price: 0.5, unit: 'second', seconds: 5, rate: 0.1 }, 'seedance fast should bill 0.1 Dream points per second');
-assert.deepEqual(calculateMediaVideoPrice('wanx2.1-t2v-plus', 5), { hold: 1, price: 1, unit: 'second', seconds: 5, rate: 0.2 }, 'seedance 1 pro should bill 0.2 Dream points per second');
-assert.deepEqual(calculateMediaVideoPrice('wan2.2-t2v-plus', 5), { hold: 1.5, price: 1.5, unit: 'second', seconds: 5, rate: 0.3 }, 'seedance 1.5 pro should bill 0.3 Dream points per second');
-assert.deepEqual(calculateMediaVideoPrice('veo3.1-fast', 5), { hold: 7.5, price: 7.5, unit: 'second', seconds: 5, rate: 1.5 }, 'seedance 2 pro should bill 1.5 Dream points per second');
+assert.deepEqual(calculateMediaVideoPrice('wanx2.1-t2v-turbo', 5), { hold: 3, price: 3, unit: 'request', seconds: null, rate: 3 }, 'seedance fast should bill with a profitable fixed request price');
+assert.deepEqual(calculateMediaVideoPrice('wanx2.1-t2v-plus', 5), { hold: 4, price: 4, unit: 'request', seconds: null, rate: 4 }, 'seedance 1 pro should bill with a profitable fixed request price');
+assert.deepEqual(calculateMediaVideoPrice('wan2.2-t2v-plus', 5), { hold: 5, price: 5, unit: 'request', seconds: null, rate: 5 }, 'seedance 1.5 pro should bill with a profitable fixed request price');
 assert.deepEqual(calculateMediaVideoPrice('grok-video-3', 10), { hold: 0.85, price: 0.85, unit: 'request', seconds: null, rate: 0.85 }, 'grok video should use fixed per-request pricing');
 assert.equal(normalizeMediaVideoDuration(999, 'veo3.1-fast'), 10, 'seedance duration should be capped to avoid oversized unpaid exposure');
 assert.equal(normalizeMediaVideoDuration(0, 'wanx2.1-t2v-turbo'), 5, 'invalid seedance duration should use safe default duration');
-assert.equal(normalizeMediaVideoDuration(1, 'wanx2.1-t2v-turbo'), 2, 'seedance duration should respect verified upstream minimum');
+assert.equal(normalizeMediaVideoDuration(1, 'wanx2.1-t2v-turbo'), 1, 'fixed-price WAN video duration is not sent upstream');
 
 assert.equal(normalizeMediaImageSizeForModel('dall-e-3', '2048x2048'), '1024x1024', 'dall-e-3 should never receive unsupported square 2K size');
 assert.equal(normalizeMediaImageSizeForModel('dall-e-3', '1152x2048'), '1024x1792', 'dall-e-3 portrait should map to supported portrait size');
