@@ -557,9 +557,9 @@ function normalizeChatModel(value) {
 }
 
 const MEDIA_IMAGE_MODELS = [
-  { id: 'gpt-image-1', name: 'GPT 标准作图', type: 'image', tier: 'standard', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 1.20, enabled: true, note: 'GPT 图片能力，1K 标准图；失败不扣费。' },
-  { id: 'gpt-image-2', name: 'GPT 高清作图', type: 'image', tier: 'pro', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 1.50, enabled: true, note: 'GPT 高清图片能力，适合复杂画面；失败不扣费。' },
-  { id: 'gpt-image-2-all', name: 'GPT 全能作图', type: 'image', tier: 'ultra', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 1.80, enabled: true, note: 'GPT 全能图片能力，适合高质量输出；失败不扣费。' },
+  { id: 'gpt-image-1', name: 'GPT 标准作图', type: 'image', tier: 'standard', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 0.40, enabled: true, note: 'GPT 图片能力，1K 标准图；失败不扣费。' },
+  { id: 'gpt-image-2', name: 'GPT 高清作图', type: 'image', tier: 'pro', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 0.40, enabled: true, note: 'GPT 高清图片能力，适合复杂画面；失败不扣费。' },
+  { id: 'gpt-image-2-all', name: 'GPT 全能作图', type: 'image', tier: 'ultra', unit: '张', supportsReferenceImages: true, estimatedDreamPoints: 0.40, enabled: true, note: 'GPT 全能图片能力，适合高质量输出；失败不扣费。' },
   { id: 'grok-4.1-image', name: 'Grok 作图', type: 'image', tier: 'beta', unit: '张', estimatedDreamPoints: 2.00, enabled: false, note: '本轮复测未返回图片，暂不开放。' },
   { id: 'grok-4.2-image', name: 'Grok 新版作图', type: 'image', tier: 'beta', unit: '张', estimatedDreamPoints: 2.00, enabled: false, note: '本轮复测未返回图片，暂不开放。' }
 ];
@@ -575,11 +575,11 @@ const MEDIA_VIDEO_MODELS = [
 
 const MEDIA_MODEL_MAP = new Map([...MEDIA_IMAGE_MODELS, ...MEDIA_VIDEO_MODELS].map((item) => [item.id, item]));
 const MEDIA_IMAGE_BASE_PRICES = {
-  'gpt-image-1': 1.20,
-  'gpt-image-2': 1.50,
-  'gpt-image-2-all': 1.80,
-  'grok-4.1-image': 2.00,
-  'grok-4.2-image': 2.00
+  'gpt-image-1': 0.40,
+  'gpt-image-2': 0.40,
+  'gpt-image-2-all': 0.40,
+  'grok-4.1-image': 0.40,
+  'grok-4.2-image': 0.40
 };
 const MEDIA_IMAGE_PRICING = Object.fromEntries(MEDIA_IMAGE_MODELS.map((model) => {
   const base = MEDIA_IMAGE_BASE_PRICES[model.id] ?? 0.40;
@@ -1566,7 +1566,7 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
     }
     const images = extractMediaImages(data, output_format, prompt);
     if (!images.length) return res.status(502).json({ error: publicMediaErrorMessage(502, data?.error?.message || data?.message || '上游没有返回图片。'), status: upstreamResp.status });
-    const cost = extractTaskCost(data) ?? salePrice;
+    const cost = extractTaskCost(data);
     const billing = await applyMediaBalanceEvent({
       access,
       eventType: 'image_charge',
