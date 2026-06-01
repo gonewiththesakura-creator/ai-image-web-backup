@@ -615,11 +615,15 @@ const MEDIA_VIDEO_PRICING = {
   'grok-video-3': { unit: 'request', price: 0.85 }
 };
 const VIDEO_API_BASE_URL = (process.env.VIDEO_API_BASE_URL || API_BASE_URL.replace(/\/v1$/, '')).replace(/\/$/, '');
-const MEDIA_REQUIRE_9999 = String(process.env.MEDIA_REQUIRE_9999 || '1') !== '0';
+const MEDIA_REQUIRE_EXCLUSIVE_GROUP = String(process.env.MEDIA_REQUIRE_EXCLUSIVE_GROUP || '1') !== '0';
+const MEDIA_ALLOWED_GROUP_IDS = new Set(String(process.env.MEDIA_ALLOWED_GROUP_IDS || '17')
+  .split(',')
+  .map((item) => Number(item.trim()))
+  .filter((item) => Number.isInteger(item) && item > 0));
 const SUB2API_DATABASE_URL = process.env.SUB2API_DATABASE_URL || 'postgresql://sub2api:sub2api@sub2api-postgres:5432/sub2api';
 const sub2apiPool = new pg.Pool({ connectionString: SUB2API_DATABASE_URL, max: 3, idleTimeoutMillis: 30000, connectionTimeoutMillis: 5000 });
-const T8_MEDIA_API_BASE_URL = (process.env.T8_MEDIA_API_BASE_URL || VIDEO_API_BASE_URL || API_BASE_URL.replace(/\/v1$/, '')).replace(/\/$/, '');
-const T8_MEDIA_API_KEY = normalizeApiKey(process.env.T8_MEDIA_API_KEY || '');
+const MEDIA_UPSTREAM_API_BASE_URL = (process.env.MEDIA_UPSTREAM_API_BASE_URL || VIDEO_API_BASE_URL || API_BASE_URL.replace(/\/v1$/, '')).replace(/\/$/, '');
+const MEDIA_UPSTREAM_API_KEY = normalizeApiKey(process.env.MEDIA_UPSTREAM_API_KEY || '');
 
 function normalizeMediaModel(value, type) {
   const requested = String(value || '').trim();
@@ -879,7 +883,7 @@ async function getSub2ApiColumns(tableName) {
 
 async function requireMediaApiKeyAccess(apiKey) {
   const normalized = normalizeApiKey(apiKey);
-  if (!normalized) throw publicError(401, '请输入 9999 套餐 API Key 后再使用媒体创作。');
+  if (!normalized) throw publicError(401, '请输入已开通媒体创作套餐的 API Key 后再使用。');
   try {
     const [apiKeyColumns, groupColumns] = await Promise.all([
       getSub2ApiColumns('api_keys'),
@@ -892,7 +896,17 @@ async function requireMediaApiKeyAccess(apiKey) {
     if (groupColumns.has('status')) select.push('g.status AS group_status');
     if (groupColumns.has('subscription_type')) select.push('g.subscription_type AS subscription_type');
     if (groupColumns.has('allow_image_generation')) select.push('g.allow_image_generation AS allow_image_generation');
-    select.push(`EXISTS (SELECT 1 FROM subscription_plans sp WHERE sp.group_id = k.group_id AND (sp.price = 9999 OR sp.name ~* '9999' OR COALESCE(sp.description, '') ~* '9999')) AS has_9999_plan`);
+    select.push(`EXISTS (
+      SELECT 1
+      FROM subscription_plans sp
+      WHERE sp.group_id = k.group_id
+        AND COALESCE(sp.for_sale, true) IS TRUE
+        AND (
+          sp.name ~* 'media|image|video|媒体|视频|图|创作'
+          OR COALESCE(sp.product_name, '') ~* 'media|image|video|媒体|视频|图|创作'
+          OR COALESCE(sp.description, '') ~* 'media|image|video|媒体|视频|图|创作'
+        )
+    ) AS has_media_plan`);
     const result = await sub2apiPool.query(
       `SELECT ${select.join(', ')} FROM api_keys k LEFT JOIN groups g ON g.id = k.group_id WHERE k.key = $1 LIMIT 1`,
       [normalized]
@@ -906,10 +920,11 @@ async function requireMediaApiKeyAccess(apiKey) {
     const groupName = String(row.group_name || '');
     const subscriptionType = String(row.subscription_type || '');
     const allowImageGeneration = row.allow_image_generation === true || row.allow_image_generation === 1 || String(row.allow_image_generation).toLowerCase() === 'true';
-    const is9999 = /9999/.test(`${groupName} ${subscriptionType}`) || row.has_9999_plan === true || row.has_9999_plan === 1 || String(row.has_9999_plan).toLowerCase() === 'true';
-    const isMedia = /media|image|video|媒体|视频|图/i.test(groupName) || allowImageGeneration;
-    if (MEDIA_REQUIRE_9999 && !is9999) throw publicError(403, '该 API Key 不是 9999 媒体套餐，不能使用 T8 媒体能力。');
-    if (!isMedia) throw publicError(403, '该 API Key 未开通媒体创作分组。');
+    const hasMediaPlan = row.has_media_plan === true || row.has_media_plan === 1 || String(row.has_media_plan).toLowerCase() === 'true';
+    const allowedByConfiguredGroup = MEDIA_ALLOWED_GROUP_IDS.size === 0 || MEDIA_ALLOWED_GROUP_IDS.has(Number(row.group_id));
+    const isMedia = allowedByConfiguredGroup || hasMediaPlan || /media|image|video|媒体|视频|图|创作/i.test(groupName) || allowImageGeneration;
+    if (MEDIA_REQUIRE_EXCLUSIVE_GROUP && !allowedByConfiguredGroup) throw publicError(403, '该 API Key 未开通媒体创作套餐。');
+    if (!isMedia) throw publicError(403, '该 API Key 未开通媒体创作套餐。');
     return {
       keyId: row.id,
       keyName: row.name,
@@ -917,9 +932,9 @@ async function requireMediaApiKeyAccess(apiKey) {
       groupId: row.group_id,
       groupName,
       subscriptionType,
-      is9999,
-      has9999Plan: Boolean(row.has_9999_plan),
-      isMedia
+      isMedia,
+      hasMediaPlan,
+      allowedByConfiguredGroup
     };
   } catch (err) {
     if (err.status) throw err;
@@ -1517,8 +1532,8 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
     const startedAt = Date.now();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    const mediaUpstreamKey = T8_MEDIA_API_KEY || apiKey;
-    const imageBaseUrl = T8_MEDIA_API_KEY ? `${T8_MEDIA_API_BASE_URL}/v1` : API_BASE_URL;
+    const mediaUpstreamKey = MEDIA_UPSTREAM_API_KEY || apiKey;
+    const imageBaseUrl = MEDIA_UPSTREAM_API_KEY ? `${MEDIA_UPSTREAM_API_BASE_URL}/v1` : API_BASE_URL;
     const upstreamRequest = await buildMediaImageUpstreamRequest({ model: upstreamModel, prompt, size, quality, output_format, n, references: referenceImages });
     const upstreamResp = await fetch(`${imageBaseUrl}${upstreamRequest.path}`, {
       method: 'POST',
@@ -1589,8 +1604,8 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Math.min(REQUEST_TIMEOUT_MS, 180000));
-    const mediaUpstreamKey = T8_MEDIA_API_KEY || apiKey;
-    const upstreamResp = await fetch(`${T8_MEDIA_API_BASE_URL}/v2/videos/generations`, {
+    const mediaUpstreamKey = MEDIA_UPSTREAM_API_KEY || apiKey;
+    const upstreamResp = await fetch(`${MEDIA_UPSTREAM_API_BASE_URL}/v2/videos/generations`, {
       method: 'POST',
       signal: controller.signal,
       headers: { Authorization: `Bearer ${mediaUpstreamKey}`, 'Content-Type': 'application/json' },
@@ -1612,7 +1627,7 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
     db.prepare(`
       INSERT INTO media_tasks (id, upstream_task_id, provider, task_type, model, prompt, status, cost, usage_json, response_json, output_url, api_base_hash, api_key_hash, created_at, updated_at, completed_at, user_id, api_key_id, sale_price, hold_amount, billing_status)
       VALUES (?, ?, 'compatible', 'video', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
-    `).run(id, upstreamTaskId, model, prompt, status, cost, data?.usage ? JSON.stringify(data.usage) : null, JSON.stringify(data).slice(0, 20000), outputUrl, hashSecret(T8_MEDIA_API_BASE_URL), hashSecret(mediaUpstreamKey), now, now, isFinalTaskStatus(status) ? now : null, String(access.userId), String(access.keyId), pricing.price, pricing.hold);
+    `).run(id, upstreamTaskId, model, prompt, status, cost, data?.usage ? JSON.stringify(data.usage) : null, JSON.stringify(data).slice(0, 20000), outputUrl, hashSecret(MEDIA_UPSTREAM_API_BASE_URL), hashSecret(mediaUpstreamKey), now, now, isFinalTaskStatus(status) ? now : null, String(access.userId), String(access.keyId), pricing.price, pricing.hold);
     res.status(202).json({ ok: true, task: publicTask(db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(id)), message: '视频已提交，生成成功后才扣费。' });
   } catch (err) {
     console.error('[media-video-submit] error:', { name: err?.name, message: err?.message });
@@ -1630,7 +1645,7 @@ app.get('/api/media/videos/proxy', async (req, res) => {
     const taskId = String(req.query?.taskId || '').slice(0, 120);
     const row = db.prepare('SELECT * FROM media_tasks WHERE id = ? OR upstream_task_id = ?').get(taskId, taskId);
     if (!row || row.task_type !== 'video') throw publicError(404, '视频不存在。');
-    if (row.api_key_hash !== hashSecret(T8_MEDIA_API_KEY || apiKey) && row.api_key_hash !== hashSecret(apiKey)) throw publicError(403, '该 API Key 无权查看此视频。');
+    if (row.api_key_hash !== hashSecret(MEDIA_UPSTREAM_API_KEY || apiKey) && row.api_key_hash !== hashSecret(apiKey)) throw publicError(403, '该 API Key 无权查看此视频。');
     if (row.status !== 'SUCCESS' || !row.output_url) throw publicError(404, '视频还未生成完成。');
 
     const range = String(req.headers.range || '');
@@ -1668,16 +1683,16 @@ app.get('/api/media/tasks/:id', async (req, res) => {
     const id = String(req.params.id || '').slice(0, 120);
     const row = db.prepare('SELECT * FROM media_tasks WHERE id = ? OR upstream_task_id = ?').get(id, id);
     if (!row) throw publicError(404, '任务不存在。');
-    if (row.api_key_hash !== hashSecret(T8_MEDIA_API_KEY || apiKey) && row.api_key_hash !== hashSecret(apiKey)) throw publicError(403, '该 API Key 无权查看此任务。');
+    if (row.api_key_hash !== hashSecret(MEDIA_UPSTREAM_API_KEY || apiKey) && row.api_key_hash !== hashSecret(apiKey)) throw publicError(403, '该 API Key 无权查看此任务。');
 
     let latest = null;
     if (row.task_type === 'video' && !isFinalTaskStatus(row.status)) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 60000);
-      const upstreamResp = await fetch(`${T8_MEDIA_API_BASE_URL}/v2/videos/generations/${encodeURIComponent(row.upstream_task_id)}`, {
+      const upstreamResp = await fetch(`${MEDIA_UPSTREAM_API_BASE_URL}/v2/videos/generations/${encodeURIComponent(row.upstream_task_id)}`, {
         method: 'GET',
         signal: controller.signal,
-        headers: { Authorization: `Bearer ${T8_MEDIA_API_KEY || apiKey}` }
+        headers: { Authorization: `Bearer ${MEDIA_UPSTREAM_API_KEY || apiKey}` }
       }).finally(() => clearTimeout(timeout));
       const text = await upstreamResp.text();
       latest = parseJsonText(text);
@@ -1712,7 +1727,7 @@ app.get('/api/media/tasks', async (req, res) => {
     await requireMediaApiKeyAccess(apiKey);
     const limit = Math.min(Math.max(Number(req.query?.limit || 20), 1), 100);
     const taskKeyHashes = [hashSecret(apiKey)];
-    if (T8_MEDIA_API_KEY) taskKeyHashes.push(hashSecret(T8_MEDIA_API_KEY));
+    if (MEDIA_UPSTREAM_API_KEY) taskKeyHashes.push(hashSecret(MEDIA_UPSTREAM_API_KEY));
     const rows = db.prepare(`SELECT * FROM media_tasks WHERE api_key_hash IN (${taskKeyHashes.map(() => '?').join(',')}) ORDER BY created_at DESC LIMIT ?`).all(...taskKeyHashes, limit);
     res.json({ ok: true, tasks: rows.map(publicTask) });
   } catch (err) {
