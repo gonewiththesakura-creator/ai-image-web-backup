@@ -77,21 +77,20 @@ assert.equal(resolveImageRequestSettings({ size: '2048x1152', outputMode: '2k' }
 assert.equal(resolveImageRequestSettings({ size: '1536x1152', outputMode: '4k', hasReferenceImages: true }).finalSize, '1024x1024', 'reference image mode should still force safe 1024x1024');
 assert.equal(resolveImageRequestSettings({ size: '4096x4096', outputMode: '4k', usingTrial: true }).finalSize, '1024x1024', 'trial mode should keep free default size');
 
-const expectedImageModels = ['qwen-image', 'gpt-image-1', 'flux-schnell', 'dall-e-3', 'gpt-image-2', 'nano-banana', 'flux-kontext-pro', 'flux-kontext-max', 'grok-4.1-image'];
+const expectedImageModels = ['gpt-image-1', 'gpt-image-2', 'gpt-image-2-all'];
 const expectedVideoModels = [
   'doubao-seedance-1-0-pro-fast-251015',
   'doubao-seedance-1-0-pro-250528',
   'doubao-seedance-1-5-pro-251215',
   'doubao-seedance-2-0-fast-260128',
-  'wanx2.1-t2v-turbo',
-  'wan2.2-t2v-plus',
-  'MiniMax-Hailuo-02'
+  'doubao-seedance-2-0-260128',
+  'grok-video-3'
 ];
 const enabledImages = MEDIA_IMAGE_MODELS.filter((item) => item.enabled).map((item) => item.id);
 const enabledVideos = MEDIA_VIDEO_MODELS.filter((item) => item.enabled).map((item) => item.id);
 assert.deepEqual(enabledImages, expectedImageModels, 'all verified working image models should be enabled and exposed in a stable order');
 assert.deepEqual(enabledVideos, expectedVideoModels, 'all verified working video models should be enabled and exposed in a stable order');
-for (const id of ['qwen-image', 'gpt-image-1', 'flux-kontext-pro', 'flux-kontext-max']) {
+for (const id of ['gpt-image-1', 'gpt-image-2', 'gpt-image-2-all']) {
   assert.equal(MEDIA_IMAGE_MODELS.find((item) => item.id === id)?.supportsReferenceImages, true, `${id} should advertise media reference-image support`);
 }
 for (const item of expectedVideoModels.map((id) => MEDIA_VIDEO_MODELS.find((model) => model.id === id))) {
@@ -110,24 +109,20 @@ for (const id of expectedVideoModels) {
   assert.ok(MEDIA_VIDEO_PRICING[id], `${id} must have video pricing`);
   assert.equal(normalizeMediaModel(id, 'video'), id, `${id} should normalize to itself while enabled`);
 }
-assert.equal(calculateMediaImagePrice('qwen-image', '1024x1024', 'low', 1), 0.50, 'qwen image 1K floor price should be 0.5 Dream points');
-assert.equal(calculateMediaImagePrice('qwen-image', '2048x2048', 'auto', 1), 1.00, 'qwen image 2K should scale from the 0.5 floor price');
-assert.equal(calculateMediaImagePrice('flux-schnell', '1024x1024', 'high', 1), 0.80, 'flux image 1K floor price should be 0.8 Dream points and ignore high quality labels');
-assert.equal(calculateMediaImagePrice('flux-kontext-pro', '3840x2160', 'auto', 1), 2.40, 'flux 4K pricing should scale from the 0.8 floor price');
-assert.equal(calculateMediaImagePrice('gpt-image-2', '1024x1024', 'low', 1), 0.40, 'flagship image2 1K anchor price should be 0.4 Dream points');
-assert.equal(calculateMediaImagePrice('gpt-image-2', '2048x2048', 'high', 1), 0.80, 'flagship image2 2K anchor price should be 0.8 Dream points and ignore high quality labels');
-assert.equal(calculateMediaImagePrice('gpt-image-2', '3840x3840', 'auto', 1), 1.20, 'flagship image2 4K anchor price should be 1.2 Dream points');
-assert.equal(calculateMediaImagePrice('grok-4.1-image', '3840x2160', 'low', 2), 2.40, '4K pricing should be 3x per image and multiply by count');
-assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-1-0-pro-fast-251015', 5), { hold: 1, price: 1, unit: 'request', seconds: null, rate: 1 }, 'seedance fast should bill above observed final upstream cost');
-assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-1-0-pro-250528', 5), { hold: 1.5, price: 1.5, unit: 'request', seconds: null, rate: 1.5 }, 'seedance 1 pro should bill above observed final upstream cost');
-assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-1-5-pro-251215', 5), { hold: 1.5, price: 1.5, unit: 'request', seconds: null, rate: 1.5 }, 'seedance 1.5 pro should bill above observed final upstream cost');
-assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-2-0-fast-260128', 5), { hold: 6, price: 6, unit: 'request', seconds: null, rate: 6 }, 'seedance 2 pro should bill above observed final upstream cost');
-assert.deepEqual(calculateMediaVideoPrice('wanx2.1-t2v-turbo', 5), { hold: 3, price: 3, unit: 'request', seconds: null, rate: 3 }, 'wan fast should bill above observed final upstream cost');
-assert.deepEqual(calculateMediaVideoPrice('wan2.2-t2v-plus', 5), { hold: 8, price: 8, unit: 'request', seconds: null, rate: 8 }, 'wan pro should bill above observed final upstream cost');
-assert.deepEqual(calculateMediaVideoPrice('MiniMax-Hailuo-02', 6), { hold: 5, price: 5, unit: 'request', seconds: null, rate: 5 }, 'hailuo should bill above observed final upstream cost');
-assert.equal(normalizeMediaVideoDuration(0, 'MiniMax-Hailuo-02'), 6, 'MiniMax invalid duration should use safe default duration');
-assert.equal(normalizeMediaVideoSize('wan2.2-t2v-plus', '16:9'), '1920x1080', 'Wan 2.2 should use a verified supported landscape size');
-assert.equal(normalizeMediaVideoSize('wanx2.1-t2v-turbo', '16:9'), '1280x720', 'Wan 2.1 turbo should use the lower-cost verified landscape size');
+assert.equal(calculateMediaImagePrice('gpt-image-1', '1024x1024', 'low', 1), 1.20, 'gpt-image-1 1K sale price should cover observed GPT image cost');
+assert.equal(calculateMediaImagePrice('gpt-image-1', '2048x2048', 'auto', 1), 2.40, 'gpt-image-1 2K should scale from the base price');
+assert.equal(calculateMediaImagePrice('gpt-image-2', '1024x1024', 'low', 1), 1.50, 'gpt-image-2 1K sale price should cover observed GPT image cost');
+assert.equal(calculateMediaImagePrice('gpt-image-2', '2048x2048', 'high', 1), 3.00, 'gpt-image-2 2K should scale from the base price');
+assert.equal(calculateMediaImagePrice('gpt-image-2-all', '3840x3840', 'auto', 1), 5.40, 'gpt-image-2-all 4K should scale from the base price');
+assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-1-0-pro-fast-251015', 5), { hold: 1, price: 1, unit: 'second', seconds: 5, rate: 0.2 }, 'seedance fast 5s should bill by selected duration');
+assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-1-0-pro-fast-251015', 10), { hold: 2, price: 2, unit: 'second', seconds: 10, rate: 0.2 }, 'seedance fast 10s should bill double 5s');
+assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-1-0-pro-250528', 10), { hold: 4, price: 4, unit: 'second', seconds: 10, rate: 0.4 }, 'seedance 1 pro should bill 10s by selected duration');
+assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-1-5-pro-251215', 10), { hold: 4, price: 4, unit: 'second', seconds: 10, rate: 0.4 }, 'seedance 1.5 pro should bill 10s by selected duration');
+assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-2-0-fast-260128', 5), { hold: 8, price: 8, unit: 'second', seconds: 5, rate: 1.6 }, 'seedance 2 fast 5s should use separate high-cost pricing');
+assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-2-0-fast-260128', 10), { hold: 16, price: 16, unit: 'second', seconds: 10, rate: 1.6 }, 'seedance 2 fast 10s should not be sold at 2s cost');
+assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-2-0-260128', 5), { hold: 9, price: 9, unit: 'second', seconds: 5, rate: 1.8 }, 'seedance 2 pro should use separate high-cost pricing');
+assert.deepEqual(calculateMediaVideoPrice('grok-video-3', 5), { hold: 2, price: 2, unit: 'request', seconds: null, rate: 2 }, 'grok video should use fixed profitable beta price');
+assert.equal(normalizeMediaVideoDuration(6, 'doubao-seedance-1-0-pro-fast-251015'), 10, 'video duration selector should snap to 5s/10s billing buckets');
 
 assert.equal(normalizeMediaImageSizeForModel('dall-e-3', '2048x2048'), '1024x1024', 'dall-e-3 should never receive unsupported square 2K size');
 assert.equal(normalizeMediaImageSizeForModel('dall-e-3', '1152x2048'), '1024x1792', 'dall-e-3 portrait should map to supported portrait size');
