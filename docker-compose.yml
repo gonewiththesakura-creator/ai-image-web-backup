@@ -1,4 +1,32 @@
 services:
+  media-upstream-proxy:
+    build: .
+    container_name: dreamapi-media-upstream-proxy
+    command: node src/media-upstream-proxy.js
+    expose:
+      - "8095"
+    environment:
+      - PORT=8095
+      - UPSTREAM_BASE_URL=https://ai.t8star.org
+      - UPSTREAM_API_KEY=sk-3HN...xQmj
+      - INTERNAL_PROXY_TOKEN=WWIfIBYsMQ-1fvceTQpLwLYSIungHGCGdmqi9oSO4b2zkZWS8kY6wLEtsokA8E8d
+      - REQUEST_TIMEOUT_MS=600000
+      - MAX_BODY_BYTES=80mb
+    restart: unless-stopped
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8095/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   ai-image-web:
     build: .
     container_name: ai-image-web
@@ -23,9 +51,10 @@ services:
       - MEDIA_REQUIRE_EXCLUSIVE_GROUP=1
       - MEDIA_ALLOWED_GROUP_IDS=17
       - SUB2API_DATABASE_URL=postgresql://sub2api:5023f63f13d932a6b36af8b154dbf6eef52c6f10fd2829477d6574285388b228@sub2api-postgres:5432/sub2api
-      - VIDEO_API_BASE_URL=https://ai.t8star.org
-      - MEDIA_UPSTREAM_API_BASE_URL=https://ai.t8star.org
-      - MEDIA_UPSTREAM_API_KEY=sk-3HN...xQmj
+      - VIDEO_API_BASE_URL=http://media-upstream-proxy:8095
+      - MEDIA_UPSTREAM_API_BASE_URL=http://media-upstream-proxy:8095
+      - MEDIA_UPSTREAM_API_KEY=proxy-managed
+      - MEDIA_UPSTREAM_PROXY_TOKEN=WWIfIBYsMQ-1fvceTQpLwLYSIungHGCGdmqi9oSO4b2zkZWS8kY6wLEtsokA8E8d
       - UMAMI_WEBSITE_ID=595998a1-3596-4065-853e-6952ee26c957
     restart: unless-stopped
     extra_hosts:

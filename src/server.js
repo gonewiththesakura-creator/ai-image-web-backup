@@ -623,7 +623,7 @@ const MEDIA_ALLOWED_GROUP_IDS = new Set(String(process.env.MEDIA_ALLOWED_GROUP_I
 const SUB2API_DATABASE_URL = process.env.SUB2API_DATABASE_URL || 'postgresql://sub2api:sub2api@sub2api-postgres:5432/sub2api';
 const sub2apiPool = new pg.Pool({ connectionString: SUB2API_DATABASE_URL, max: 3, idleTimeoutMillis: 30000, connectionTimeoutMillis: 5000 });
 const MEDIA_UPSTREAM_API_BASE_URL = (process.env.MEDIA_UPSTREAM_API_BASE_URL || VIDEO_API_BASE_URL || API_BASE_URL.replace(/\/v1$/, '')).replace(/\/$/, '');
-const MEDIA_UPSTREAM_API_KEY = normalizeApiKey(process.env.MEDIA_UPSTREAM_API_KEY || '');
+const MEDIA_UPSTREAM_PROXY_TOKEN = String(process.env.MEDIA_UPSTREAM_PROXY_TOKEN || '').trim();
 
 function normalizeMediaModel(value, type) {
   const requested = String(value || '').trim();
@@ -1532,13 +1532,12 @@ app.post('/api/media/images/generations', limiter, async (req, res) => {
     const startedAt = Date.now();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    const mediaUpstreamKey = MEDIA_UPSTREAM_API_KEY || apiKey;
-    const imageBaseUrl = MEDIA_UPSTREAM_API_KEY ? `${MEDIA_UPSTREAM_API_BASE_URL}/v1` : API_BASE_URL;
+    const imageBaseUrl = `${MEDIA_UPSTREAM_API_BASE_URL}/v1`;
     const upstreamRequest = await buildMediaImageUpstreamRequest({ model: upstreamModel, prompt, size, quality, output_format, n, references: referenceImages });
     const upstreamResp = await fetch(`${imageBaseUrl}${upstreamRequest.path}`, {
       method: 'POST',
       signal: controller.signal,
-      headers: { Authorization: `Bearer ${mediaUpstreamKey}`, ...upstreamRequest.headers },
+      headers: { Authorization: `Bearer ${apiKey}`, 'x-dreamapi-media-proxy-token': MEDIA_UPSTREAM_PROXY_TOKEN, ...upstreamRequest.headers },
       body: upstreamRequest.body
     }).finally(() => clearTimeout(timeout));
     const text = await upstreamResp.text();
@@ -1604,11 +1603,10 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Math.min(REQUEST_TIMEOUT_MS, 180000));
-    const mediaUpstreamKey = MEDIA_UPSTREAM_API_KEY || apiKey;
     const upstreamResp = await fetch(`${MEDIA_UPSTREAM_API_BASE_URL}/v2/videos/generations`, {
       method: 'POST',
       signal: controller.signal,
-      headers: { Authorization: `Bearer ${mediaUpstreamKey}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${apiKey}`, 'x-dreamapi-media-proxy-token': MEDIA_UPSTREAM_PROXY_TOKEN, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     }).finally(() => clearTimeout(timeout));
     const text = await upstreamResp.text();
@@ -1627,7 +1625,7 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
     db.prepare(`
       INSERT INTO media_tasks (id, upstream_task_id, provider, task_type, model, prompt, status, cost, usage_json, response_json, output_url, api_base_hash, api_key_hash, created_at, updated_at, completed_at, user_id, api_key_id, sale_price, hold_amount, billing_status)
       VALUES (?, ?, 'compatible', 'video', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
-    `).run(id, upstreamTaskId, model, prompt, status, cost, data?.usage ? JSON.stringify(data.usage) : null, JSON.stringify(data).slice(0, 20000), outputUrl, hashSecret(MEDIA_UPSTREAM_API_BASE_URL), hashSecret(mediaUpstreamKey), now, now, isFinalTaskStatus(status) ? now : null, String(access.userId), String(access.keyId), pricing.price, pricing.hold);
+    `).run(id, upstreamTaskId, model, prompt, status, cost, data?.usage ? JSON.stringify(data.usage) : null, JSON.stringify(data).slice(0, 20000), outputUrl, hashSecret(MEDIA_UPSTREAM_API_BASE_URL), hashSecret(apiKey), now, now, isFinalTaskStatus(status) ? now : null, String(access.userId), String(access.keyId), pricing.price, pricing.hold);
     res.status(202).json({ ok: true, task: publicTask(db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(id)), message: '视频已提交，生成成功后才扣费。' });
   } catch (err) {
     console.error('[media-video-submit] error:', { name: err?.name, message: err?.message });
@@ -1645,7 +1643,7 @@ app.get('/api/media/videos/proxy', async (req, res) => {
     const taskId = String(req.query?.taskId || '').slice(0, 120);
     const row = db.prepare('SELECT * FROM media_tasks WHERE id = ? OR upstream_task_id = ?').get(taskId, taskId);
     if (!row || row.task_type !== 'video') throw publicError(404, '视频不存在。');
-    if (row.api_key_hash !== hashSecret(MEDIA_UPSTREAM_API_KEY || apiKey) && row.api_key_hash !== hashSecret(apiKey)) throw publicError(403, '该 API Key 无权查看此视频。');
+    if (row.api_key_hash !== hashSecret(apiKey)) throw publicError(403, '该 API Key 无权查看此视频。');
     if (row.status !== 'SUCCESS' || !row.output_url) throw publicError(404, '视频还未生成完成。');
 
     const range = String(req.headers.range || '');
@@ -1683,7 +1681,7 @@ app.get('/api/media/tasks/:id', async (req, res) => {
     const id = String(req.params.id || '').slice(0, 120);
     const row = db.prepare('SELECT * FROM media_tasks WHERE id = ? OR upstream_task_id = ?').get(id, id);
     if (!row) throw publicError(404, '任务不存在。');
-    if (row.api_key_hash !== hashSecret(MEDIA_UPSTREAM_API_KEY || apiKey) && row.api_key_hash !== hashSecret(apiKey)) throw publicError(403, '该 API Key 无权查看此任务。');
+    if (row.api_key_hash !== hashSecret(apiKey)) throw publicError(403, '该 API Key 无权查看此任务。');
 
     let latest = null;
     if (row.task_type === 'video' && !isFinalTaskStatus(row.status)) {
@@ -1692,7 +1690,7 @@ app.get('/api/media/tasks/:id', async (req, res) => {
       const upstreamResp = await fetch(`${MEDIA_UPSTREAM_API_BASE_URL}/v2/videos/generations/${encodeURIComponent(row.upstream_task_id)}`, {
         method: 'GET',
         signal: controller.signal,
-        headers: { Authorization: `Bearer ${MEDIA_UPSTREAM_API_KEY || apiKey}` }
+        headers: { Authorization: `Bearer ${apiKey}`, 'x-dreamapi-media-proxy-token': MEDIA_UPSTREAM_PROXY_TOKEN }
       }).finally(() => clearTimeout(timeout));
       const text = await upstreamResp.text();
       latest = parseJsonText(text);
@@ -1727,7 +1725,6 @@ app.get('/api/media/tasks', async (req, res) => {
     await requireMediaApiKeyAccess(apiKey);
     const limit = Math.min(Math.max(Number(req.query?.limit || 20), 1), 100);
     const taskKeyHashes = [hashSecret(apiKey)];
-    if (MEDIA_UPSTREAM_API_KEY) taskKeyHashes.push(hashSecret(MEDIA_UPSTREAM_API_KEY));
     const rows = db.prepare(`SELECT * FROM media_tasks WHERE api_key_hash IN (${taskKeyHashes.map(() => '?').join(',')}) ORDER BY created_at DESC LIMIT ?`).all(...taskKeyHashes, limit);
     res.json({ ok: true, tasks: rows.map(publicTask) });
   } catch (err) {
