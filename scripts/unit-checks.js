@@ -121,7 +121,7 @@ assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-1-5-pro-251215', 10),
 assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-2-0-fast-260128', 5), { hold: 8, price: 8, unit: 'second', seconds: 5, rate: 1.6 }, 'seedance 2 fast 5s should use separate high-cost pricing');
 assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-2-0-fast-260128', 10), { hold: 16, price: 16, unit: 'second', seconds: 10, rate: 1.6 }, 'seedance 2 fast 10s should not be sold at 2s cost');
 assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-2-0-260128', 5), { hold: 9, price: 9, unit: 'second', seconds: 5, rate: 1.8 }, 'seedance 2 pro should use separate high-cost pricing');
-assert.deepEqual(calculateMediaVideoPrice('grok-video-3', 5), { hold: 2, price: 2, unit: 'request', seconds: null, rate: 2 }, 'grok video should use fixed profitable beta price');
+assert.deepEqual(calculateMediaVideoPrice('grok-video-3', 5), { hold: 1, price: 1, unit: 'request', seconds: null, rate: 1 }, 'grok video should use fixed entry price above observed 0.5 upstream cost');
 assert.equal(normalizeMediaVideoDuration(6, 'doubao-seedance-1-0-pro-fast-251015'), 10, 'video duration selector should snap to 5s/10s billing buckets');
 
 assert.equal(normalizeMediaImageSizeForModel('dall-e-3', '2048x2048'), '1024x1024', 'dall-e-3 should never receive unsupported square 2K size');
