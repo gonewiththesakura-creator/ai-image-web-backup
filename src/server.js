@@ -574,11 +574,14 @@ const MEDIA_IMAGE_MODELS = [
 ];
 
 const MEDIA_VIDEO_MODELS = [
-  { id: 'wanx2.1-t2v-turbo', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 3.00, defaultDuration: 5, enabled: true, note: '按次计费，当前上游不支持自定义时长；失败不扣费。' },
-  { id: 'wanx2.1-t2v-plus', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 1 Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 4.00, defaultDuration: 5, enabled: true, note: '按次计费，当前上游不支持自定义时长；失败不扣费。' },
-  { id: 'wan2.2-t2v-plus', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 1.5 Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 5.00, defaultDuration: 5, enabled: true, note: '按次计费，当前上游不支持自定义时长；失败不扣费。' },
-  { id: 'veo3.1-fast', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 2 Pro 视频', type: 'video', tier: 'ultra', unit: '次', estimatedDreamPoints: 12.00, defaultDuration: 5, enabled: false, note: '旗舰视频能力待成本复核后开放；失败不扣费。' },
-  { id: 'grok-video-3', supportsFirstFrame: true, supportsLastFrame: false, name: 'Grok 视频', type: 'video', tier: 'beta', unit: '次', estimatedDreamPoints: 0.85, defaultDuration: 5, enabled: true, note: '按次计费，Beta 能力稳定性可能波动；失败不扣费。' }
+  { id: 'doubao-seedance-1-0-pro-fast-251015', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 1.00, defaultDuration: 5, enabled: true, note: '按次计费，约 5 秒；失败不扣费。' },
+  { id: 'doubao-seedance-1-0-pro-250528', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 1 Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 1.50, defaultDuration: 5, enabled: true, note: '按次计费，约 5 秒；失败不扣费。' },
+  { id: 'doubao-seedance-1-5-pro-251215', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 1.5 Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 1.50, defaultDuration: 5, enabled: true, note: '按次计费，约 5 秒；失败不扣费。' },
+  { id: 'doubao-seedance-2-0-fast-260128', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 2 Pro 视频', type: 'video', tier: 'ultra', unit: '次', estimatedDreamPoints: 6.00, defaultDuration: 5, enabled: true, note: '按次计费，实测输出约 2 秒；失败不扣费。' },
+  { id: 'wanx2.1-t2v-turbo', supportsFirstFrame: false, supportsLastFrame: false, name: 'Wan Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 3.00, defaultDuration: 5, enabled: true, note: '按次计费，固定上游成本；失败不扣费。' },
+  { id: 'wan2.2-t2v-plus', supportsFirstFrame: false, supportsLastFrame: false, name: 'Wan Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 8.00, defaultDuration: 5, enabled: true, note: '按次计费，高成本模型；失败不扣费。' },
+  { id: 'MiniMax-Hailuo-02', supportsFirstFrame: false, supportsLastFrame: false, name: 'Hailuo 标准视频', type: 'video', tier: 'standard', unit: '次', estimatedDreamPoints: 5.00, defaultDuration: 6, enabled: true, note: '按次计费，约 6 秒；失败不扣费。' },
+  { id: 'grok-video-3', supportsFirstFrame: true, supportsLastFrame: false, name: 'Grok 视频', type: 'video', tier: 'beta', unit: '次', estimatedDreamPoints: 3.00, defaultDuration: 5, enabled: false, note: '提交超时/稳定性待复核，暂不开放；失败不扣费。' }
 ];
 
 const MEDIA_MODEL_MAP = new Map([...MEDIA_IMAGE_MODELS, ...MEDIA_VIDEO_MODELS].map((item) => [item.id, item]));
@@ -608,11 +611,14 @@ const MEDIA_SIZE_MULTIPLIERS = {
 };
 const MEDIA_QUALITY_MULTIPLIERS = { low: 1, medium: 1, auto: 1, high: 1 };
 const MEDIA_VIDEO_PRICING = {
+  'doubao-seedance-1-0-pro-fast-251015': { unit: 'request', price: 1.00 },
+  'doubao-seedance-1-0-pro-250528': { unit: 'request', price: 1.50 },
+  'doubao-seedance-1-5-pro-251215': { unit: 'request', price: 1.50 },
+  'doubao-seedance-2-0-fast-260128': { unit: 'request', price: 6.00 },
   'wanx2.1-t2v-turbo': { unit: 'request', price: 3.00 },
-  'wanx2.1-t2v-plus': { unit: 'request', price: 4.00 },
-  'wan2.2-t2v-plus': { unit: 'request', price: 5.00 },
-  'veo3.1-fast': { unit: 'request', price: 12.00 },
-  'grok-video-3': { unit: 'request', price: 0.85 }
+  'wan2.2-t2v-plus': { unit: 'request', price: 8.00 },
+  'MiniMax-Hailuo-02': { unit: 'request', price: 5.00 },
+  'grok-video-3': { unit: 'request', price: 3.00 }
 };
 const VIDEO_API_BASE_URL = (process.env.VIDEO_API_BASE_URL || API_BASE_URL.replace(/\/v1$/, '')).replace(/\/$/, '');
 const MEDIA_REQUIRE_EXCLUSIVE_GROUP = String(process.env.MEDIA_REQUIRE_EXCLUSIVE_GROUP || '1') !== '0';
@@ -671,7 +677,12 @@ function normalizeMediaVideoSize(model, aspectRatio, requestedSize = '') {
   const explicit = String(requestedSize || '').trim().replace('*', 'x');
   const allowed = new Set(['1920x1080', '1280x720', '720x1280', '832x480', '480x832', '1088x832', '1248x1632', '1080x1920', '624x624', '960x960', '832x1088', '1440x1440', '1632x1248']);
   if (allowed.has(explicit)) return explicit;
-  if (model === 'grok-video-3') return '';
+  if (model === 'grok-video-3' || model === 'MiniMax-Hailuo-02') return '';
+  if (model === 'wan2.2-t2v-plus') {
+    if (aspectRatio === '9:16') return '1080x1920';
+    if (aspectRatio === '1:1') return '1440x1440';
+    return '1920x1080';
+  }
   if (aspectRatio === '9:16') return '720x1280';
   if (aspectRatio === '1:1') return '960x960';
   return '1280x720';
@@ -1608,7 +1619,7 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
     const aspectRatio = normalizeVideoAspectRatio(req.body?.aspect_ratio);
     const size = normalizeMediaVideoSize(model, aspectRatio, req.body?.size);
     const body = { model, prompt };
-    if (Number.isFinite(duration) && duration > 0 && model !== 'grok-video-3' && !model.startsWith('wan')) body.duration = duration;
+    if (Number.isFinite(duration) && duration > 0 && model !== 'grok-video-3' && model === 'MiniMax-Hailuo-02') body.duration = duration;
     if (size) body.size = size;
     const firstFrameUrl = normalizeHttpImageUrl(req.body?.image_url || req.body?.first_frame_url || req.body?.firstFrameUrl, '首帧图片 URL') || await saveMediaReferenceImageForUpstream(req.body?.firstFrameImage || req.body?.first_frame_image, req, 'first-frame');
     const lastFrameUrl = normalizeHttpImageUrl(req.body?.end_image_url || req.body?.last_frame_url || req.body?.lastFrameUrl, '尾帧图片 URL') || await saveMediaReferenceImageForUpstream(req.body?.lastFrameImage || req.body?.last_frame_image, req, 'last-frame');
@@ -2207,6 +2218,7 @@ export {
   calculateMediaImagePrice,
   calculateMediaVideoPrice,
   normalizeMediaVideoDuration,
+  normalizeMediaVideoSize,
   normalizeMediaModel,
   normalizeMediaImageSizeForModel,
   normalizeMediaImageQualityForModel,
