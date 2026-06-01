@@ -8,7 +8,7 @@ services:
     environment:
       - PORT=8095
       - UPSTREAM_BASE_URL=https://ai.t8star.org
-      - UPSTREAM_API_KEY=sk-3HN...xQmj
+      - UPSTREAM_API_KEY=sk-3HNkro5cCnJuHLuLubINcx7SYOivzOilgfSENrhRPwJnxQmj
       - INTERNAL_PROXY_TOKEN=WWIfIBYsMQ-1fvceTQpLwLYSIungHGCGdmqi9oSO4b2zkZWS8kY6wLEtsokA8E8d
       - REQUEST_TIMEOUT_MS=600000
       - MAX_BODY_BYTES=80mb
