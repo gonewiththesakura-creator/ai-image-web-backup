@@ -515,9 +515,9 @@
                 <label for="mediaPrompt">创作描述</label>
                 <textarea id="mediaPrompt" maxlength="4000" placeholder="例如：一只白色猫咪在雨夜霓虹街头奔跑，电影感，浅景深"></textarea>
                 <div id="mediaImageRefBox" class="ref-box media-ref-box">
-                  <div class="ref-title"><span>图片参考图</span><span class="ref-mode" id="mediaImageRefModeText">未上传</span></div>
+                  <div class="ref-title"><span id="mediaRefTitle">图片参考图</span><span class="ref-mode" id="mediaImageRefModeText">未上传</span></div>
                   <input id="mediaImageReferences" type="file" accept="image/png,image/jpeg,image/webp" multiple />
-                  <div class="hint">最多 3 张。用于图像语义编辑或风格参考；会自动压缩后提交。</div>
+                  <div class="hint" id="mediaRefHint">最多 3 张。用于图像语义编辑或风格参考；会自动压缩后提交。</div>
                   <div id="mediaImageRefPreview" class="ref-preview"></div>
                 </div>
                 <div class="grid2">
@@ -672,6 +672,8 @@
     const mediaProgressText = $('mediaProgressText');
     const mediaPrompt = $('mediaPrompt');
     const mediaImageRefBox = $('mediaImageRefBox');
+    const mediaRefTitle = $('mediaRefTitle');
+    const mediaRefHint = $('mediaRefHint');
     const mediaImageReferences = $('mediaImageReferences');
     const mediaImageRefPreview = $('mediaImageRefPreview');
     const mediaImageRefModeText = $('mediaImageRefModeText');
@@ -1491,13 +1493,19 @@
 
 
 
+    function selectedMediaModelInfo() {
+      return (mediaModels[mediaMode] || []).find((item) => item.id === selectedMediaModel) || null;
+    }
+
     function renderMediaImageRefPreview() {
       if (!mediaImageRefPreview) return;
-      mediaImageRefModeText.textContent = mediaImageReferencesData.length ? `已启用：${mediaImageReferencesData.length}/3 张` : '未上传';
+      const maxRefs = mediaMode === 'video' ? 1 : 3;
+      const label = mediaMode === 'video' ? '首帧参考图' : '媒体参考图';
+      mediaImageRefModeText.textContent = mediaImageReferencesData.length ? `已启用：${mediaImageReferencesData.length}/${maxRefs} 张` : '未上传';
       mediaImageRefPreview.innerHTML = mediaImageReferencesData.map((src, idx) => `
         <div class="ref-thumb">
-          <img src="${escapeHtml(src)}" alt="媒体参考图 ${idx + 1}" />
-          <button type="button" data-remove-media-ref="${idx}" aria-label="移除媒体参考图">×</button>
+          <img src="${escapeHtml(src)}" alt="${label} ${idx + 1}" />
+          <button type="button" data-remove-media-ref="${idx}" aria-label="移除${label}">×</button>
         </div>
       `).join('');
     }
@@ -1505,13 +1513,14 @@
     async function handleMediaImageReferences(files) {
       const list = Array.from(files || []);
       if (!list.length) return;
-      const slots = Math.max(0, 3 - mediaImageReferencesData.length);
+      const maxRefs = mediaMode === 'video' ? 1 : 3;
+      const slots = Math.max(0, maxRefs - mediaImageReferencesData.length);
       const picked = list.slice(0, slots);
-      if (!picked.length) { showToast('图片参考图最多 3 张'); mediaImageReferences.value = ''; return; }
+      if (!picked.length) { showToast(mediaMode === 'video' ? '视频首帧参考图最多 1 张' : '图片参考图最多 3 张'); mediaImageReferences.value = ''; return; }
       try {
         for (const file of picked) mediaImageReferencesData.push(await fileToCompressedDataUrl(file));
         renderMediaImageRefPreview();
-        showToast(`已添加 ${picked.length} 张媒体参考图`);
+        showToast(mediaMode === 'video' ? '已添加首帧参考图' : `已添加 ${picked.length} 张媒体参考图`);
       } catch (err) {
         showToast(err.message || '参考图处理失败');
       } finally {
@@ -1637,8 +1646,15 @@
       mediaImageTab.classList.toggle('active', mediaMode === 'image');
       mediaVideoTab.classList.toggle('active', mediaMode === 'video');
       const imageControls = [mediaSize?.closest('div'), mediaQuality?.closest('div')];
+      const selectedInfo = selectedMediaModelInfo();
       imageControls.forEach((el) => { if (el) el.style.display = mediaMode === 'image' ? 'block' : 'none'; });
-      if (mediaImageRefBox) mediaImageRefBox.style.display = mediaMode === 'image' ? 'block' : 'none';
+      if (mediaImageRefBox) {
+        const showRefBox = mediaMode === 'image' || Boolean(selectedInfo?.supportsFirstFrame);
+        mediaImageRefBox.style.display = showRefBox ? 'block' : 'none';
+        if (mediaRefTitle) mediaRefTitle.textContent = mediaMode === 'video' ? '首帧参考图' : '图片参考图';
+        if (mediaRefHint) mediaRefHint.textContent = mediaMode === 'video' ? '最多 1 张。作为视频开场参考，系统会尽量保持主体与构图。' : '最多 3 张。用于图像语义编辑或风格参考；会自动压缩后提交。';
+        mediaImageReferences.multiple = mediaMode !== 'video';
+      }
       mediaDuration.closest('div').style.display = mediaMode === 'video' ? 'block' : 'none';
       mediaAspect.closest('div').style.display = mediaMode === 'video' ? 'block' : 'none';
       submitMediaBtn.textContent = mediaMode === 'video' ? '提交视频任务' : '提交图片生成';
@@ -1659,6 +1675,7 @@
         </button>
       `;
       }).join('') || '<div class="small-note">暂无可用模型。</div>';
+      renderMediaImageRefPreview();
     }
 
     async function loadMediaModels() {
@@ -1688,9 +1705,14 @@
       setMediaStatus(mediaMode === 'video' ? '视频生成中...' : '图片生成中...');
       try {
         const endpoint = mediaMode === 'video' ? MEDIA_VIDEO_ENDPOINT : MEDIA_IMAGE_ENDPOINT;
+        const selectedInfo = selectedMediaModelInfo();
         const payload = mediaMode === 'video'
           ? { apiKey, model: selectedMediaModel, prompt, duration: Number(mediaDuration.value), aspect_ratio: mediaAspect.value }
           : { apiKey, model: selectedMediaModel, prompt, size: mediaSize.value || $('sizePreset').value, format: $('format').value, quality: 'auto', n: 1, referenceImages: mediaImageReferencesData };
+        if (mediaMode === 'video' && mediaImageReferencesData.length) {
+          if (!selectedInfo?.supportsFirstFrame) throw new Error('当前视频模型暂不支持首帧参考图。');
+          payload.firstFrameImage = mediaImageReferencesData[0];
+        }
         const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(data.error || '生成失败，请稍后重试。');
@@ -1778,8 +1800,8 @@
       }
     }
 
-    mediaImageTab.onclick = () => { mediaMode = 'image'; selectedMediaModel = ''; renderMediaModels(); };
-    mediaVideoTab.onclick = () => { mediaMode = 'video'; selectedMediaModel = ''; renderMediaModels(); };
+    mediaImageTab.onclick = () => { mediaMode = 'image'; selectedMediaModel = ''; mediaImageReferencesData = []; renderMediaModels(); };
+    mediaVideoTab.onclick = () => { mediaMode = 'video'; selectedMediaModel = ''; mediaImageReferencesData = []; renderMediaModels(); };
     syncMediaKeyBtn.onclick = async () => {
       const candidateKey = (mediaApiKey.value || '').trim() || $('apiKey').value.trim();
       if (!candidateKey) {
@@ -1828,7 +1850,10 @@
     mediaModelList.addEventListener('click', (ev) => {
       const btn = ev.target.closest('[data-media-model]');
       if (!btn) return;
+      const previousInfo = selectedMediaModelInfo();
       selectedMediaModel = btn.dataset.mediaModel;
+      const nextInfo = selectedMediaModelInfo();
+      if (mediaMode === 'video' && previousInfo?.supportsFirstFrame !== nextInfo?.supportsFirstFrame) mediaImageReferencesData = [];
       renderMediaModels();
     });
     mediaSize?.addEventListener('change', renderMediaModels);

@@ -93,8 +93,12 @@ assert.deepEqual(enabledVideos, expectedVideoModels, 'all verified working video
 for (const id of ['gpt-image-1', 'gpt-image-2', 'gpt-image-2-all']) {
   assert.equal(MEDIA_IMAGE_MODELS.find((item) => item.id === id)?.supportsReferenceImages, true, `${id} should advertise media reference-image support`);
 }
+const expectedFirstFrameVideoModels = new Set([
+  'doubao-seedance-1-0-pro-fast-251015',
+  'doubao-seedance-1-0-pro-250528'
+]);
 for (const item of expectedVideoModels.map((id) => MEDIA_VIDEO_MODELS.find((model) => model.id === id))) {
-  assert.equal(Boolean(item?.supportsFirstFrame), false, `${item?.id} should not advertise unverified first-frame video support`);
+  assert.equal(Boolean(item?.supportsFirstFrame), expectedFirstFrameVideoModels.has(item?.id), `${item?.id} first-frame support flag should match verified rollout scope`);
   assert.equal(Boolean(item?.supportsLastFrame), false, `${item?.id} should not advertise unverified last-frame video support`);
 }
 for (const item of [...MEDIA_IMAGE_MODELS, ...MEDIA_VIDEO_MODELS]) {

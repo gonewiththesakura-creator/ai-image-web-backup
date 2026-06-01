@@ -565,8 +565,8 @@ const MEDIA_IMAGE_MODELS = [
 ];
 
 const MEDIA_VIDEO_MODELS = [
-  { id: 'doubao-seedance-1-0-pro-fast-251015', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 1.00, defaultDuration: 5, enabled: true, note: '可选 5 秒/10 秒，按时长计费；失败不扣费。' },
-  { id: 'doubao-seedance-1-0-pro-250528', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 1 Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 2.00, defaultDuration: 5, enabled: true, note: '可选 5 秒/10 秒，按时长计费；失败不扣费。' },
+  { id: 'doubao-seedance-1-0-pro-fast-251015', supportsFirstFrame: true, supportsLastFrame: false, name: 'Seedance Fast 视频', type: 'video', tier: 'fast', unit: '次', estimatedDreamPoints: 1.00, defaultDuration: 5, enabled: true, note: '可选 5 秒/10 秒，支持首帧参考图；失败不扣费。' },
+  { id: 'doubao-seedance-1-0-pro-250528', supportsFirstFrame: true, supportsLastFrame: false, name: 'Seedance 1 Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 2.00, defaultDuration: 5, enabled: true, note: '可选 5 秒/10 秒，支持首帧参考图；失败不扣费。' },
   { id: 'doubao-seedance-1-5-pro-251215', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 1.5 Pro 视频', type: 'video', tier: 'pro', unit: '次', estimatedDreamPoints: 2.00, defaultDuration: 5, enabled: true, note: '可选 5 秒/10 秒，按时长计费；失败不扣费。' },
   { id: 'doubao-seedance-2-0-fast-260128', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 2 Fast 视频', type: 'video', tier: 'ultra', unit: '次', estimatedDreamPoints: 8.00, defaultDuration: 5, enabled: true, note: '按 5 秒/10 秒档位计费；失败不扣费。' },
   { id: 'doubao-seedance-2-0-260128', supportsFirstFrame: false, supportsLastFrame: false, name: 'Seedance 2 Pro 视频', type: 'video', tier: 'ultra', unit: '次', estimatedDreamPoints: 9.00, defaultDuration: 5, enabled: true, note: '按 5 秒/10 秒档位计费；失败不扣费。' },
@@ -1242,6 +1242,16 @@ function normalizeHttpImageUrl(value, fieldName = '参考图 URL') {
   return url.slice(0, 2000);
 }
 
+async function normalizeVideoFirstFrameUrl(req, modelInfo) {
+  const rawUrl = req.body?.image_url || req.body?.first_frame_url || req.body?.firstFrameUrl;
+  const rawUpload = req.body?.firstFrameImage || req.body?.first_frame_image;
+  const hasLastFrame = Boolean(req.body?.end_image_url || req.body?.last_frame_url || req.body?.lastFrameUrl || req.body?.lastFrameImage || req.body?.last_frame_image);
+  if (hasLastFrame) throw publicError(400, '视频暂不支持尾帧参考图，请只上传首帧参考图。');
+  if (!rawUrl && !rawUpload) return '';
+  if (!modelInfo?.supportsFirstFrame) throw publicError(400, '当前视频模型暂不支持首帧参考图，请选择支持首帧参考图的 Seedance 模型。');
+  return normalizeHttpImageUrl(rawUrl, '首帧图片 URL') || await saveMediaReferenceImageForUpstream(rawUpload, req, 'video-first-frame');
+}
+
 async function buildMediaImageUpstreamRequest({ model, prompt, size, quality, output_format, n, references }) {
   if (!references.length) {
     return {
@@ -1610,11 +1620,8 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
     const body = { model, prompt };
     if (Number.isFinite(duration) && duration > 0 && model !== 'grok-video-3') body.duration = duration;
     if (size) body.size = size;
-    const firstFrameUrl = normalizeHttpImageUrl(req.body?.image_url || req.body?.first_frame_url || req.body?.firstFrameUrl, '首帧图片 URL');
-    const lastFrameUrl = normalizeHttpImageUrl(req.body?.end_image_url || req.body?.last_frame_url || req.body?.lastFrameUrl, '尾帧图片 URL');
-    if (firstFrameUrl || lastFrameUrl || req.body?.firstFrameImage || req.body?.first_frame_image || req.body?.lastFrameImage || req.body?.last_frame_image) {
-      throw publicError(400, '视频暂不支持首尾帧参考图，请直接用文字描述生成视频。');
-    }
+    const firstFrameUrl = await normalizeVideoFirstFrameUrl(req, modelInfo);
+    if (firstFrameUrl) body.image_url = firstFrameUrl;
     const pendingCount = db.prepare(`SELECT COUNT(*) AS count FROM media_tasks WHERE api_key_id = ? AND billing_status = 'PENDING' AND created_at > ?`).get(String(access.keyId), Date.now() - 6 * 60 * 60 * 1000).count;
     if (Number(pendingCount || 0) >= 3) throw publicError(429, '当前 API Key 有过多视频任务待完成，请等待任务完成后再提交。');
     const pricing = calculateMediaVideoPrice(model, duration);
@@ -1645,6 +1652,9 @@ app.post('/api/media/videos/generations', limiter, async (req, res) => {
       INSERT INTO media_tasks (id, upstream_task_id, provider, task_type, model, prompt, status, cost, usage_json, response_json, output_url, api_base_hash, api_key_hash, created_at, updated_at, completed_at, user_id, api_key_id, sale_price, hold_amount, billing_status)
       VALUES (?, ?, 'compatible', 'video', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
     `).run(id, upstreamTaskId, model, prompt, status, cost, data?.usage ? JSON.stringify(data.usage) : null, JSON.stringify(data).slice(0, 20000), outputUrl, hashSecret(MEDIA_UPSTREAM_API_BASE_URL), hashSecret(apiKey), now, now, isFinalTaskStatus(status) ? now : null, String(access.userId), String(access.keyId), pricing.price, pricing.hold);
+    if (firstFrameUrl) {
+      db.prepare('UPDATE media_tasks SET usage_json = ? WHERE id = ?').run(JSON.stringify({ firstFrame: true, firstFrameUrlHash: hashSecret(firstFrameUrl) }), id);
+    }
     res.status(202).json({ ok: true, task: publicTask(db.prepare('SELECT * FROM media_tasks WHERE id = ?').get(id)), message: '视频已提交，生成成功后才扣费。' });
   } catch (err) {
     console.error('[media-video-submit] error:', { name: err?.name, message: err?.message });
