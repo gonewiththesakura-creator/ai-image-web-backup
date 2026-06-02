@@ -49,7 +49,7 @@ services:
       - ADMIN_PASSWORD=admin123456
       - UMAMI_DATABASE_URL=postgresql://umami:${UMAMI_DB_PASSWORD}@umami-postgres:5432/umami
       - MEDIA_REQUIRE_EXCLUSIVE_GROUP=1
-      - MEDIA_ALLOWED_GROUP_IDS=17
+      - MEDIA_ALLOWED_GROUP_IDS=17,19,20,21,22
       - SUB2API_DATABASE_URL=postgresql://sub2api:5023f63f13d932a6b36af8b154dbf6eef52c6f10fd2829477d6574285388b228@sub2api-postgres:5432/sub2api
       - VIDEO_API_BASE_URL=http://media-upstream-proxy:8095
       - MEDIA_UPSTREAM_API_BASE_URL=http://media-upstream-proxy:8095

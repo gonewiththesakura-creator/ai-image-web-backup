@@ -872,7 +872,14 @@ async function settleVideoBilling(row, latest = null) {
       db.prepare('UPDATE media_tasks SET billing_status = ?, updated_at = ? WHERE id = ?').run('CHARGED', Date.now(), lockedRow.id);
       return null;
     }
-    const access = { userId: lockedRow.user_id, keyId: lockedRow.api_key_id, groupId: 17 };
+    let billingGroupId = 17;
+    try {
+      const keyRes = await sub2apiPool.query('SELECT group_id FROM api_keys WHERE id = $1 AND deleted_at IS NULL LIMIT 1', [String(lockedRow.api_key_id)]);
+      if (keyRes.rowCount && keyRes.rows[0].group_id) billingGroupId = keyRes.rows[0].group_id;
+    } catch (err) {
+      console.error('[media-video-billing] failed to resolve api key group:', { message: err?.message });
+    }
+    const access = { userId: lockedRow.user_id, keyId: lockedRow.api_key_id, groupId: billingGroupId };
     const upstreamCost = extractTaskCost(latest) ?? lockedRow.cost;
     if (lockedRow.status === 'SUCCESS') {
       const amount = roundMoney(lockedRow.sale_price || calculateMediaVideoPrice(lockedRow.model).price);
