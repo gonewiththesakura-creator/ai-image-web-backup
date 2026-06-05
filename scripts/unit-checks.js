@@ -19,7 +19,7 @@ import {
   calculateMediaImagePrice,
   calculateMediaVideoPrice,
   normalizeMediaVideoDuration,
-  normalizeMediaVideoSize,
+  conservativeMediaActualCost,
   buildMediaImageUpstreamRequest
 } from '../src/server.js';
 
@@ -137,5 +137,9 @@ assert.equal(publicMediaErrorMessage(502, 'openai_error'), '上游暂时没有�
 assert.equal(publicMediaErrorMessage(502, '当前分组上游负载已饱和，请稍后再试：size must be one of 1024x1024, 1024x1792 or 1792x1024 for dall-e-3 (request id: abc)'), '当前模型不支持所选尺寸，已按模型支持范围调整，请重新提交。', 'mixed saturation and size detail should be classified as size error');
 assert.equal(summarizeMediaImageSuccess({ cost: null, billing: { charged: 0.41 }, images: [{}], usage: { total_tokens: 4190 } }), '图片生成完成，已扣费 0.41 点，已返回 1 张图片。', 'success summary should hide verbose usage JSON and upstream cost');
 assert.deepEqual(extractMediaImages({ data: [{ revised_prompt: 'only text' }], usage: { total_tokens: 12 } }, 'png', 'p'), [], 'text-only upstream responses must not be treated as successful images');
+
+assert.equal(conservativeMediaActualCost(null, 0.4), 0.4, 'missing upstream image cost should fall back to sale price for conservative margin audit');
+assert.equal(conservativeMediaActualCost(0, 0.8), 0.8, 'zero upstream cost should not make paid media look free');
+assert.equal(conservativeMediaActualCost(0.10291, 1), 0.10291, 'positive upstream video cost should be preserved');
 
 console.log('Unit checks passed.');

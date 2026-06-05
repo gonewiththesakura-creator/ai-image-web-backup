@@ -778,6 +778,13 @@ function normalizeBillingImageSize(size) {
   return '1K';
 }
 
+function conservativeMediaActualCost(cost, salePrice) {
+  const n = Number(cost);
+  if (Number.isFinite(n) && n > 0) return roundMoney(n);
+  const fallback = roundMoney(salePrice);
+  return Number.isFinite(fallback) && fallback > 0 ? fallback : 0;
+}
+
 async function applyMediaBalanceEvent({ access, eventType, taskType, model, amount, upstreamCost = null, taskId = null, metadata = {}, credit = false }) {
   const value = roundMoney(amount);
   if (!Number.isFinite(value) || value <= 0) throw publicError(400, '无效媒体扣费金额。');
@@ -794,7 +801,7 @@ async function applyMediaBalanceEvent({ access, eventType, taskType, model, amou
     if (!credit && balance + 1e-9 < value) throw publicError(402, `余额不足，当前余额 ${balance.toFixed(4)}，本次需要 ${value.toFixed(4)}。`);
     const reqId = `media-${eventType}-${eventId}`.slice(0, 120);
     const signedAmount = credit ? -value : value;
-    const actualCost = credit ? 0 : (upstreamCost === null ? 0 : Number(upstreamCost || 0));
+    const actualCost = credit ? 0 : conservativeMediaActualCost(upstreamCost, value);
     const usageRes = await client.query(`
       INSERT INTO usage_logs (
         user_id, api_key_id, account_id, request_id, model,
@@ -853,7 +860,7 @@ async function applyMediaBalanceEvent({ access, eventType, taskType, model, amou
     db.prepare(`
       INSERT INTO media_billing_events (id, task_id, event_type, task_type, model, user_id, api_key_id, amount, upstream_cost, status, usage_log_id, billing_entry_id, metadata_json, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'APPLIED', ?, ?, ?, ?)
-    `).run(eventId, taskId, eventType, taskType, model, userId, apiKeyId, value, upstreamCost, String(usageLogId), String(billRes.rows[0].id), JSON.stringify(metadata).slice(0, 4000), now);
+    `).run(eventId, taskId, eventType, taskType, model, userId, apiKeyId, value, actualCost, String(usageLogId), String(billRes.rows[0].id), JSON.stringify(metadata).slice(0, 4000), now);
     return { eventId, usageLogId: String(usageLogId), billingEntryId: String(billRes.rows[0].id), amount: value };
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -2285,5 +2292,6 @@ export {
   summarizeMediaImageSuccess,
   publicMediaErrorMessage,
   extractMediaImages,
+  conservativeMediaActualCost,
   buildMediaImageUpstreamRequest
 };
