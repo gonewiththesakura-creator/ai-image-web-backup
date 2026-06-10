@@ -11,16 +11,24 @@ const INTERNAL_PROXY_TOKEN = String(process.env.INTERNAL_PROXY_TOKEN || '').trim
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 600000);
 const MAX_BODY_BYTES = process.env.MAX_BODY_BYTES || '80mb';
 const PUBLIC_ERROR_MESSAGE = '媒体服务暂时不可用，请稍后重试。';
+const IMAGE_MODEL_ALIASES = new Map([
+  ['gpt-image-2-all', 'gpt-image-2']
+]);
+const IMAGE_SIZE_ALIASES = new Map([
+  ['3840x3840', '2880x2880']
+]);
 
-if (!UPSTREAM_BASE_URL) {
+const IS_TEST = process.env.NODE_ENV === 'test';
+
+if (!UPSTREAM_BASE_URL && !IS_TEST) {
   console.error('[media-upstream-proxy] missing UPSTREAM_BASE_URL');
   process.exit(1);
 }
-if (!UPSTREAM_API_KEY) {
+if (!UPSTREAM_API_KEY && !IS_TEST) {
   console.error('[media-upstream-proxy] missing UPSTREAM_API_KEY');
   process.exit(1);
 }
-if (!INTERNAL_PROXY_TOKEN || INTERNAL_PROXY_TOKEN.length < 24) {
+if ((!INTERNAL_PROXY_TOKEN || INTERNAL_PROXY_TOKEN.length < 24) && !IS_TEST) {
   console.error('[media-upstream-proxy] INTERNAL_PROXY_TOKEN must be set and at least 24 chars');
   process.exit(1);
 }
@@ -51,6 +59,31 @@ function isAllowedPath(pathname) {
 
 function getClientIp(req) {
   return req.ip || req.socket?.remoteAddress || '';
+}
+
+function rewriteJsonImageRequest(pathname, rawBody) {
+  if (!pathname.startsWith('/v1/images/') || !Buffer.isBuffer(rawBody) || rawBody.length === 0) {
+    return rawBody;
+  }
+
+  let body;
+  try {
+    body = JSON.parse(rawBody.toString('utf8'));
+  } catch {
+    return rawBody;
+  }
+
+  let changed = false;
+  if (typeof body.model === 'string' && IMAGE_MODEL_ALIASES.has(body.model)) {
+    body.model = IMAGE_MODEL_ALIASES.get(body.model);
+    changed = true;
+  }
+  if (typeof body.size === 'string' && IMAGE_SIZE_ALIASES.has(body.size)) {
+    body.size = IMAGE_SIZE_ALIASES.get(body.size);
+    changed = true;
+  }
+
+  return changed ? Buffer.from(JSON.stringify(body)) : rawBody;
 }
 
 function requireInternalAuth(req, res, next) {
@@ -94,13 +127,14 @@ app.use(async (req, res) => {
   }
   headers.set('authorization', `Bearer ${UPSTREAM_API_KEY}`);
   headers.set('x-request-id', reqId);
+  const upstreamBody = req.method === 'GET' ? undefined : rewriteJsonImageRequest(pathname, req.body);
 
   let upstreamResp;
   try {
     upstreamResp = await fetch(url, {
       method: req.method,
       headers,
-      body: req.method === 'GET' ? undefined : req.body,
+      body: upstreamBody,
       signal: controller.signal
     });
   } catch (err) {
@@ -162,7 +196,11 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: PUBLIC_ERROR_MESSAGE });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`DreamApi media upstream proxy listening on 0.0.0.0:${PORT}`);
-  console.log(`Upstream host hash: ${hashShort(UPSTREAM_BASE_URL)}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`DreamApi media upstream proxy listening on 0.0.0.0:${PORT}`);
+    console.log(`Upstream host hash: ${hashShort(UPSTREAM_BASE_URL)}`);
+  });
+}
+
+export { rewriteJsonImageRequest };

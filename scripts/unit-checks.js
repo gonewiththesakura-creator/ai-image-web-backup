@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { rewriteJsonImageRequest } from '../src/media-upstream-proxy.js';
 import {
   classifyUpstreamHttpError,
   isRetriableUpstreamHttpError,
@@ -119,6 +120,9 @@ assert.equal(calculateMediaImagePrice('gpt-image-2', '1024x1024', 'low', 1), 0.4
 assert.equal(calculateMediaImagePrice('gpt-image-2', '2048x2048', 'high', 1), 0.80, 'flagship image2 2K anchor price should be 0.8 Dream points and ignore high quality labels');
 assert.equal(calculateMediaImagePrice('gpt-image-2-all', '3840x3840', 'auto', 1), 1.20, 'gpt-image-2-all legacy 4K square should keep 4K pricing');
 assert.equal(calculateMediaImagePrice('gpt-image-2-all', '2880x2880', 'auto', 1), 1.20, 'gpt-image-2-all safe 4K square should keep 4K pricing');
+const rewrittenImageRequest = JSON.parse(rewriteJsonImageRequest('/v1/images/generations', Buffer.from(JSON.stringify({ model: 'gpt-image-2-all', size: '3840x3840', prompt: 'p' }))).toString('utf8'));
+assert.deepEqual(rewrittenImageRequest, { model: 'gpt-image-2', size: '2880x2880', prompt: 'p' }, 'media proxy should map DreamApi all-model and over-budget 4K square to T8-safe values');
+assert.deepEqual(JSON.parse(rewriteJsonImageRequest('/v1/images/generations', Buffer.from(JSON.stringify({ model: 'gpt-image-2', size: '2048x2048' }))).toString('utf8')), { model: 'gpt-image-2', size: '2048x2048' }, 'media proxy should keep supported 2K requests unchanged');
 assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-1-0-pro-fast-251015', 5), { hold: 1, price: 1, unit: 'second', seconds: 5, rate: 0.2 }, 'seedance fast 5s should bill by selected duration');
 assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-1-0-pro-fast-251015', 10), { hold: 2, price: 2, unit: 'second', seconds: 10, rate: 0.2 }, 'seedance fast 10s should bill double 5s');
 assert.deepEqual(calculateMediaVideoPrice('doubao-seedance-1-0-pro-250528', 10), { hold: 4, price: 4, unit: 'second', seconds: 10, rate: 0.4 }, 'seedance 1 pro should bill 10s by selected duration');
